@@ -1,0 +1,26 @@
+[package]
+name = "stint-app"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "stint-app"
+path = "src/main.rs"
+
+# The app is macOS only. Elsewhere the binary compiles to a stub, so Linux CI
+# checks the workspace without building GPUI.
+[target.'cfg(target_os = "macos")'.dependencies]
+anyhow.workspace = true
+gpui-kit.workspace = true
+gpui-tray.workspace = true
+jiff.workspace = true
+objc2-app-kit.workspace = true
+objc2-foundation.workspace = true
+stint-core.workspace = true
+stint-providers.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

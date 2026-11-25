@@ -9,16 +9,20 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
-# Run clippy across all workspace targets
-lint:
+# Check formatting and run clippy across all workspace targets
+lint: fmt-check
     cargo clippy --workspace --all-targets --locked -- -D warnings
 
 # Run offline unit tests across the workspace
 test:
     cargo test --workspace --locked
 
+# Audit dependencies against the RustSec advisory database
+vuln:
+    cargo audit
+
 # Run all pre-PR verification checks
-check: fmt-check lint test
+check: lint test
 
 # Run the stint CLI binary
 cli *args:

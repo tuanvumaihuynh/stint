@@ -1,6 +1,6 @@
 mod sqlite;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 
 use crate::account::{AccountId, AccountProfile, NewAccount};
 use crate::error::StoreError;
@@ -13,7 +13,7 @@ pub trait QuotaStore {
     fn insert_account(
         &mut self,
         account: &NewAccount,
-        created_at: DateTime<Utc>,
+        created_at: Timestamp,
     ) -> Result<AccountProfile, StoreError>;
 
     fn accounts(&self) -> Result<Vec<AccountProfile>, StoreError>;

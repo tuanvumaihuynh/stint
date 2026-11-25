@@ -9,7 +9,7 @@ repository = "https://github.com/tuanvumaihuynh/stint"
 publish = false
 
 [workspace.dependencies]
-chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+jiff = { version = "1.0.3", default-features = false, features = ["std"] }
 rusqlite = { version = "0.43.0", default-features = false, features = ["bundled", "cache"] }
 rusqlite_migration = { version = "2.9.0", default-features = false }
 tempfile = "3.27.0"

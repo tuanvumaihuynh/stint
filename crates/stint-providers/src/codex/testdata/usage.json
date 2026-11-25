@@ -1,0 +1,36 @@
+{
+  "user_id": "user-fake",
+  "account_id": "acct_fake_123",
+  "plan_type": "pro",
+  "rate_limit": {
+    "allowed": true,
+    "limit_reached": false,
+    "primary_window": { "used_percent": 18, "limit_window_seconds": 18000, "reset_after_seconds": 9420, "reset_at": 1790100000 },
+    "secondary_window": { "used_percent": 45.5, "limit_window_seconds": 604800, "reset_after_seconds": 492401, "reset_at": "2026-09-27T02:00:00Z" }
+  },
+  "additional_rate_limits": [
+    {
+      "limit_name": "codex_other",
+      "metered_feature": "codex_other",
+      "rate_limit": {
+        "allowed": false,
+        "limit_reached": true,
+        "primary_window": { "used_percent": 120, "limit_window_seconds": 18000, "reset_at": 0 },
+        "secondary_window": { "used_percent": 5, "limit_window_seconds": 3600, "reset_at": 1790100000 }
+      }
+    },
+    {
+      "limit_name": "",
+      "rate_limit": {
+        "primary_window": { "used_percent": 50, "limit_window_seconds": 18000, "reset_at": 1790100000 }
+      }
+    },
+    {
+      "limit_name": "codex_mini",
+      "rate_limit": {
+        "primary_window": { "used_percent": -3, "limit_window_seconds": 18000, "reset_at": 1790100000 },
+        "secondary_window": null
+      }
+    }
+  ]
+}

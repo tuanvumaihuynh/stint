@@ -1,7 +1,5 @@
 mod accounts;
 mod snapshots;
-#[cfg(test)]
-mod tests;
 
 use std::fs;
 use std::path::Path;
@@ -18,7 +16,7 @@ use crate::error::StoreError;
 use crate::quota::QuotaSnapshot;
 
 // Append only. Each entry is one schema version tracked in `user_version`.
-static MIGRATION_LIST: [M<'static>; 1] = [M::up(include_str!("../../migrations/0001_init.sql"))];
+static MIGRATION_LIST: [M<'static>; 1] = [M::up(include_str!("sqlite/migrations/0001_init.sql"))];
 static MIGRATIONS: Migrations<'static> = Migrations::from_slice(&MIGRATION_LIST);
 const SCHEMA_VERSION: usize = MIGRATION_LIST.len();
 
@@ -169,4 +167,142 @@ fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
         return Ok(());
     }
     Err(err.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::account::ProviderId;
+    use crate::quota::{Percentage, QuotaWindow, WindowKind};
+
+    // Shared with the `accounts` and `snapshots` test modules.
+
+    pub(super) fn t0() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap()
+    }
+
+    pub(super) fn store() -> SqliteStore {
+        SqliteStore::open_in_memory().unwrap()
+    }
+
+    pub(super) fn new_account(provider: ProviderId, label: &str) -> NewAccount {
+        NewAccount {
+            provider,
+            label: label.into(),
+            email: None,
+        }
+    }
+
+    pub(super) fn window(kind: WindowKind, used: f64) -> QuotaWindow {
+        QuotaWindow {
+            kind,
+            scope: None,
+            used: Percentage::new(used).unwrap(),
+            resets_at: Some(t0() + kind.duration()),
+        }
+    }
+
+    #[test]
+    fn migrations_are_valid() {
+        MIGRATIONS.validate().unwrap();
+        assert_eq!(
+            MIGRATIONS
+                .pending_migrations(&Connection::open_in_memory().unwrap())
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn open_creates_parent_dirs_and_enables_wal() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("nested/stint.db");
+        let store = SqliteStore::open(&path).unwrap();
+        let mode: String = store
+            .conn
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+        assert_eq!(schema_version(&store.conn).unwrap(), SCHEMA_VERSION);
+        drop(store);
+        SqliteStore::open(&path).unwrap();
+    }
+
+    #[test]
+    fn concurrent_first_open_migrates_once() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        SqliteStore::open(&path).map(|_| ())
+                    })
+                })
+                .collect();
+            for handle in handles {
+                handle.join().unwrap().unwrap();
+            }
+        });
+        let store = SqliteStore::open_read_only(&path).unwrap();
+        assert_eq!(store.accounts().unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn open_rejects_newer_schema() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        let store = SqliteStore::open(&path).unwrap();
+        store.conn.pragma_update(None, "user_version", 99).unwrap();
+        drop(store);
+        assert!(matches!(
+            SqliteStore::open(&path),
+            Err(StoreError::SchemaTooNew {
+                found: 99,
+                supported: SCHEMA_VERSION
+            })
+        ));
+        assert!(matches!(
+            SqliteStore::open_read_only(&path),
+            Err(StoreError::SchemaTooNew { found: 99, .. })
+        ));
+    }
+
+    #[test]
+    fn read_only_store_reads_but_cannot_write() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        let mut writer = SqliteStore::open(&path).unwrap();
+        let account = writer
+            .insert_account(&new_account(ProviderId::Claude, "personal"), t0())
+            .unwrap();
+
+        let mut reader = SqliteStore::open_read_only(&path).unwrap();
+        assert_eq!(reader.accounts().unwrap(), vec![account]);
+        assert!(matches!(
+            reader.insert_account(&new_account(ProviderId::Codex, "personal"), t0()),
+            Err(StoreError::Sqlite(_))
+        ));
+    }
+
+    #[test]
+    fn read_only_open_rejects_missing_or_unmigrated_database() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        assert!(matches!(
+            SqliteStore::open_read_only(&path),
+            Err(StoreError::Sqlite(_))
+        ));
+
+        Connection::open(&path).unwrap();
+        assert!(matches!(
+            SqliteStore::open_read_only(&path),
+            Err(StoreError::SchemaOutdated { found: 0, .. })
+        ));
+    }
 }

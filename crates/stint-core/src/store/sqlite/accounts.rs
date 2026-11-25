@@ -108,3 +108,77 @@ fn duplicate_or(err: rusqlite::Error, account: &NewAccount) -> StoreError {
     }
     err.into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{new_account, store, t0};
+    use crate::account::{AccountId, ProviderId};
+    use crate::error::StoreError;
+    use crate::store::QuotaStore;
+
+    #[test]
+    fn first_account_per_provider_becomes_active() {
+        let mut store = store();
+        let mut personal = new_account(ProviderId::Claude, "personal");
+        personal.email = Some("me@example.com".into());
+        let personal = store.insert_account(&personal, t0()).unwrap();
+        let work = store
+            .insert_account(&new_account(ProviderId::Claude, "work"), t0())
+            .unwrap();
+        let gemini = store
+            .insert_account(&new_account(ProviderId::Gemini, "personal"), t0())
+            .unwrap();
+
+        assert!(personal.is_active);
+        assert_eq!(personal.email.as_deref(), Some("me@example.com"));
+        assert_eq!(personal.created_at, t0());
+        assert!(!work.is_active);
+        assert!(gemini.is_active);
+        assert_eq!(store.accounts().unwrap(), vec![personal, work, gemini]);
+    }
+
+    #[test]
+    fn duplicate_label_per_provider_is_rejected() {
+        let mut store = store();
+        let account = new_account(ProviderId::Codex, "personal");
+        store.insert_account(&account, t0()).unwrap();
+        assert!(matches!(
+            store.insert_account(&account, t0()),
+            Err(StoreError::DuplicateAccount { provider: ProviderId::Codex, label }) if label == "personal"
+        ));
+    }
+
+    #[test]
+    fn set_active_account_switches_within_provider_only() {
+        let mut store = store();
+        store
+            .insert_account(&new_account(ProviderId::Claude, "a"), t0())
+            .unwrap();
+        let b = store
+            .insert_account(&new_account(ProviderId::Claude, "b"), t0())
+            .unwrap();
+        let other = store
+            .insert_account(&new_account(ProviderId::Codex, "a"), t0())
+            .unwrap();
+
+        store.set_active_account(b.id).unwrap();
+
+        let active: Vec<_> = store
+            .accounts()
+            .unwrap()
+            .into_iter()
+            .filter(|acc| acc.is_active)
+            .map(|acc| acc.id)
+            .collect();
+        assert_eq!(active, vec![b.id, other.id]);
+    }
+
+    #[test]
+    fn set_active_account_rejects_unknown_id() {
+        let mut store = store();
+        assert!(matches!(
+            store.set_active_account(AccountId::new(7)),
+            Err(StoreError::AccountNotFound(id)) if id == AccountId::new(7)
+        ));
+    }
+}

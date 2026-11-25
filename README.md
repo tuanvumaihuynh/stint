@@ -11,26 +11,25 @@ Stint reads existing local CLI credentials and session logs on your Mac, stores 
 
 Requirements: macOS, [rustup](https://rustup.rs) (the pinned toolchain installs on first build), and [just](https://github.com/casey/just).
 
-1. Sign in with the CLIs you use, so Stint has credentials to read:
-   - Claude: sign in with Claude Code (`claude`).
-   - Codex: sign in with the Codex CLI (`codex`).
-2. Start the menu bar app:
+Start the menu bar app:
 
-   ```sh
-   just app
-   ```
+```sh
+just app
+```
 
-   The Stint icon appears in the menu bar; there is no Dock icon. Click it to open the usage popover. `⌘R` refreshes and `⌘Q` quits.
+The Stint icon appears in the menu bar; there is no Dock icon. Click it to open the menu. Adding accounts is not built yet, so a fresh install shows an empty menu.
 
-macOS may ask whether `security` can read the `Claude Code-credentials` keychain item the first time; allow it so Stint can read the Claude login. Stint only reads credentials and never refreshes or writes them, so an expired login shows a notice until you open the CLI again.
+To see the menu with made-up accounts, pass a mock scenario (debug builds only): `default`, `refreshing`, `single`, `busy`, `offline`, or `empty`.
+
+```sh
+just app default
+```
 
 Usage history is stored in `~/Library/Application Support/Stint/stint.db`. To try Stint against a throwaway database, set `STINT_DATA_DIR`:
 
 ```sh
 STINT_DATA_DIR=/tmp/stint-try just app
 ```
-
-`CLAUDE_CONFIG_DIR` and `CODEX_HOME` are honored the same way the CLIs honor them.
 
 ## Development
 
@@ -40,9 +39,11 @@ List available tasks with `just --list`, and run formatting, clippy, and unit te
 just check
 ```
 
+On macOS, `just app-check` lints and tests the menu bar app, and `just app-snapshot` photographs the menu in every mock scenario, in light and dark mode, into `target/snapshots/`.
+
 Workspace crates live under `crates/`:
 
 - `crates/stint-core`: Domain types, provider traits, SQLite WAL storage, and pace/cost calculators.
 - `crates/stint-providers`: Subscription quota clients and incremental JSONL log readers for Claude, Codex, and Gemini.
 - `crates/stint-cli`: Terminal binary (`stint`) reading cached local state without UI dependencies.
-- `crates/stint-app`: macOS accessory application with a status bar popover and desktop metrics window.
+- `crates/stint-app`: macOS accessory application with a status bar menu and desktop window.

@@ -22,6 +22,10 @@ app-check:
     cargo clippy -p stint-app --all-targets --locked -- -D warnings
     cargo test -p stint-app --locked
 
+# Photograph the status menu in every mock scenario, light and dark (macOS only)
+app-snapshot dir="target/snapshots":
+    cargo run -p stint-app -- snapshot {{dir}}
+
 # Audit dependencies against the RustSec advisory database
 vuln:
     cargo audit
@@ -33,6 +37,6 @@ check: lint test
 cli *args:
     cargo run -p stint-cli -- {{args}}
 
-# Run the stint macOS desktop and status bar app
-app:
-    cargo run -p stint-app
+# Run the stint macOS menu bar app; pass a scenario to use mock accounts, e.g. `just app default`
+app mock="":
+    STINT_MOCK={{mock}} cargo run -p stint-app

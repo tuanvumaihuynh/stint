@@ -3,16 +3,23 @@ mod app;
 #[cfg(target_os = "macos")]
 mod format;
 #[cfg(target_os = "macos")]
-mod icon;
+mod menu;
 #[cfg(target_os = "macos")]
-mod popover;
+mod mock;
 #[cfg(target_os = "macos")]
 mod quota;
+#[cfg(all(target_os = "macos", debug_assertions))]
+mod snapshot;
 #[cfg(target_os = "macos")]
-mod screen;
+mod status_menu;
 
 #[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
+    // Debug builds can photograph the menu for design review: `just app-snapshot`.
+    #[cfg(debug_assertions)]
+    if let Some(dir) = snapshot::requested_dir() {
+        return snapshot::run(&dir);
+    }
     app::run()
 }
 

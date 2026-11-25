@@ -10,23 +10,25 @@ publish = false
 
 [workspace.dependencies]
 stint-core = { path = "crates/stint-core" }
-stint-providers = { path = "crates/stint-providers" }
 
 anyhow = "1.0.105"
+async-channel = "2.5.0"
 base64 = "0.23.1"
+block2 = "0.6.2"
 gpui-kit = "=0.11.0"
-gpui-tray = { version = "=0.3.0", default-features = false, features = ["gpui-kit"] }
 jiff = { version = "1.0.3", default-features = false, features = ["std"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSEvent", "NSGraphics", "NSScreen"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSDictionary", "NSGeometry", "NSString", "NSValue"] }
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-core-graphics", "NSAppearance", "NSApplication", "NSAttributedString", "NSBitmapImageRep", "NSButton", "NSColor", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSImageRep", "NSMenu", "NSMenuItem", "NSResponder", "NSRunningApplication", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes"] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGImage", "CGWindow"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSData", "NSDate", "NSDictionary", "NSGeometry", "NSObject", "NSRunLoop", "NSString", "NSTimer", "NSValue"] }
 rusqlite = { version = "0.43.0", default-features = false, features = ["bundled", "cache"] }
 rusqlite_migration = { version = "2.9.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", default-features = false, features = ["rt-multi-thread"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

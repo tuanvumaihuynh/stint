@@ -11,4 +11,4 @@ pub use error::{CoreError, StoreError};
 pub use pace::Pace;
 pub use paths::database_path;
 pub use quota::{Percentage, QuotaSnapshot, QuotaWindow, WindowKind};
-pub use store::{DEFAULT_ACCOUNT_LABEL, QuotaStore, SqliteStore};
+pub use store::{QuotaStore, SqliteStore};

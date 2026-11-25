@@ -181,35 +181,4 @@ mod tests {
             Err(StoreError::AccountNotFound(id)) if id == AccountId::new(7)
         ));
     }
-
-    #[test]
-    fn ensure_active_account_enrolls_default_once() {
-        let mut store = store();
-
-        let first = store
-            .ensure_active_account(ProviderId::Codex, t0())
-            .unwrap();
-        let again = store
-            .ensure_active_account(ProviderId::Codex, t0())
-            .unwrap();
-
-        assert_eq!(first.label, crate::DEFAULT_ACCOUNT_LABEL);
-        assert!(first.is_active);
-        assert_eq!(first, again);
-        assert_eq!(store.accounts().unwrap(), vec![first]);
-    }
-
-    #[test]
-    fn ensure_active_account_keeps_an_existing_active_account() {
-        let mut store = store();
-        let work = store
-            .insert_account(&new_account(ProviderId::Claude, "work"), t0())
-            .unwrap();
-
-        let active = store
-            .ensure_active_account(ProviderId::Claude, t0())
-            .unwrap();
-
-        assert_eq!(active, work);
-    }
 }

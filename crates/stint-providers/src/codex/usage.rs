@@ -9,7 +9,8 @@ use crate::error::ProviderError;
 struct Response {
     account_id: Option<String>,
     rate_limit: Option<RateLimit>,
-    additional_rate_limits: Vec<AdditionalLimit>,
+    // Sent as `null` on plans without per-model limits.
+    additional_rate_limits: Option<Vec<AdditionalLimit>>,
 }
 
 #[derive(Deserialize, Default)]
@@ -59,7 +60,7 @@ pub(crate) fn parse(bytes: &[u8], account_id: &str) -> Result<Vec<QuotaWindow>, 
     }
 
     let mut windows = windows_of(response.rate_limit.as_ref(), None);
-    for limit in &response.additional_rate_limits {
+    for limit in response.additional_rate_limits.iter().flatten() {
         let Some(name) = limit.limit_name.as_deref().filter(|name| !name.is_empty()) else {
             continue;
         };
@@ -98,6 +99,7 @@ fn window_kind(seconds: i64) -> Option<WindowKind> {
         18_000 => Some(WindowKind::FiveHour),
         86_400 => Some(WindowKind::Daily),
         604_800 => Some(WindowKind::SevenDay),
+        2_592_000 => Some(WindowKind::ThirtyDay),
         _ => None,
     }
 }
@@ -121,6 +123,7 @@ mod tests {
 
     const USAGE: &str = include_str!("testdata/usage.json");
     const WEEKLY_ONLY: &str = include_str!("testdata/usage_weekly_only.json");
+    const FREE: &str = include_str!("testdata/usage_free.json");
     const ACCOUNT: &str = "acct_fake_123";
 
     fn at(seconds: i64) -> Timestamp {
@@ -168,6 +171,20 @@ mod tests {
                 kind: WindowKind::SevenDay,
                 scope: None,
                 used: pct(3.0),
+                resets_at: Some(at(1_790_628_078)),
+            }]
+        );
+    }
+
+    #[test]
+    fn free_plan_has_a_monthly_window_and_null_model_limits() {
+        let windows = parse(FREE.as_bytes(), ACCOUNT).unwrap();
+        assert_eq!(
+            windows,
+            vec![QuotaWindow {
+                kind: WindowKind::ThirtyDay,
+                scope: None,
+                used: pct(4.0),
                 resets_at: Some(at(1_790_628_078)),
             }]
         );

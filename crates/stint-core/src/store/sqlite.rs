@@ -283,6 +283,7 @@ mod tests {
             .unwrap();
 
         let mut reader = SqliteStore::open_read_only(&path).unwrap();
+        assert_eq!(reader.latest_snapshot(account.id).unwrap(), None);
         assert_eq!(reader.accounts().unwrap(), vec![account]);
         assert!(matches!(
             reader.insert_account(&new_account(ProviderId::Codex, "personal"), t0()),

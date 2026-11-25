@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use gpui_kit::{Context, Task};
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use stint_core::{ProviderId, QuotaStore, QuotaWindow, SqliteStore, StoreError};
 use stint_providers::{ClaudeProvider, CodexProvider, ProviderError, UsageProvider};
 
@@ -15,8 +15,9 @@ pub(crate) enum FetchError {
     NotSignedIn,
     TokenExpired,
     KeychainLocked,
-    RateLimited,
+    RateLimited { retry_after: Option<SignedDuration> },
     Network,
+    Status(u16),
     Other(String),
 }
 
@@ -26,8 +27,9 @@ impl From<ProviderError> for FetchError {
             ProviderError::AuthMissing => Self::NotSignedIn,
             ProviderError::TokenExpired => Self::TokenExpired,
             ProviderError::KeychainLocked => Self::KeychainLocked,
-            ProviderError::RateLimited { .. } => Self::RateLimited,
+            ProviderError::RateLimited { retry_after } => Self::RateLimited { retry_after },
             ProviderError::Transport(_) => Self::Network,
+            ProviderError::Status { status } => Self::Status(status),
             other => Self::Other(other.to_string()),
         }
     }

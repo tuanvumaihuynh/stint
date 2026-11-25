@@ -37,33 +37,37 @@ pub(crate) fn resets_in(now: Timestamp, resets_at: Timestamp) -> String {
     format!("resets in {}", duration(left))
 }
 
-/// "updated just now", "updated 22m ago".
+/// "Updated just now", "Updated 22m ago".
 pub(crate) fn updated_ago(now: Timestamp, at: Timestamp) -> String {
     let ago = now.duration_since(at);
     if ago < SignedDuration::from_mins(1) {
-        return "updated just now".to_owned();
+        return "Updated just now".to_owned();
     }
-    format!("updated {} ago", duration(ago))
+    format!("Updated {} ago", duration(ago))
 }
 
 // Within this many points of an even burn counts as on pace.
-const ON_PACE_POINTS: f64 = 5.0;
+const ON_PACE_POINTS: f64 = 3.0;
 
-/// "on pace", "12 pts ahead · runs out in 1h 20m", "8 pts under".
-pub(crate) fn pace(now: Timestamp, pace: &Pace) -> String {
-    let points = pace.delta.abs().round();
-    let mut text = if pace.delta.abs() < ON_PACE_POINTS {
-        "on pace".to_owned()
-    } else if pace.delta > 0.0 {
-        format!("{points:.0} pts ahead")
-    } else {
-        format!("{points:.0} pts under")
-    };
-    if let Some(exhausts_at) = pace.exhausts_at {
-        text.push_str(" · runs out in ");
-        text.push_str(&duration(exhausts_at.duration_since(now)));
+/// "Limit reached", "12 pts ahead, runs out in 1h 20m", "On pace", "8 pts behind".
+pub(crate) fn pace(now: Timestamp, used: f64, pace: &Pace) -> String {
+    if used >= 100.0 {
+        return "Limit reached".to_owned();
     }
-    text
+    let points = pace.delta.abs().round();
+    if pace.delta.abs() < ON_PACE_POINTS {
+        return "On pace".to_owned();
+    }
+    if pace.delta < 0.0 {
+        return format!("{points:.0} pts behind");
+    }
+    match pace.exhausts_at {
+        Some(exhausts_at) => format!(
+            "{points:.0} pts ahead, runs out in {}",
+            duration(exhausts_at.duration_since(now))
+        ),
+        None => format!("{points:.0} pts ahead"),
+    }
 }
 
 #[cfg(test)]
@@ -112,18 +116,24 @@ mod tests {
 
     #[test]
     fn last_update() {
-        assert_eq!(updated_ago(now(), now()), "updated just now");
+        assert_eq!(updated_ago(now(), now()), "Updated just now");
         let earlier = now() - SignedDuration::from_mins(22);
-        assert_eq!(updated_ago(now(), earlier), "updated 22m ago");
+        assert_eq!(updated_ago(now(), earlier), "Updated 22m ago");
     }
 
     #[test]
     fn pace_text() {
-        assert_eq!(pace(now(), &pace_of(2.0, None)), "on pace");
-        assert_eq!(pace(now(), &pace_of(-8.4, None)), "8 pts under");
+        assert_eq!(pace(now(), 50.0, &pace_of(2.0, None)), "On pace");
+        assert_eq!(pace(now(), 40.0, &pace_of(-8.4, None)), "8 pts behind");
+        assert_eq!(pace(now(), 55.0, &pace_of(5.0, None)), "5 pts ahead");
         assert_eq!(
-            pace(now(), &pace_of(12.2, Some(SignedDuration::from_mins(80)))),
-            "12 pts ahead · runs out in 1h 20m"
+            pace(
+                now(),
+                62.0,
+                &pace_of(12.2, Some(SignedDuration::from_mins(80)))
+            ),
+            "12 pts ahead, runs out in 1h 20m"
         );
+        assert_eq!(pace(now(), 100.0, &pace_of(50.0, None)), "Limit reached");
     }
 }

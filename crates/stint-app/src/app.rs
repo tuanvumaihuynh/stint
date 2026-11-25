@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use gpui_kit::{ActivationPolicy, App, AppContext, Entity, Global, QuitMode, actions};
+use gpui_kit::{ActivationPolicy, App, AppContext, Entity, Global, KeyBinding, QuitMode, actions};
 use gpui_tray::Tray;
 use stint_core::SqliteStore;
 use stint_providers::{ClaudeProvider, CodexProvider};
@@ -37,6 +37,8 @@ pub(crate) fn run() -> anyhow::Result<()> {
     let codex = CodexProvider::new(http);
 
     gpui_kit::application()
+        // The bundled icon set: refresh, spinner, and notice icons.
+        .with_assets(gpui_kit::assets::Assets)
         // The popover is the only window, so closing it must not quit the app.
         .with_quit_mode(QuitMode::Explicit)
         .run(move |cx| {
@@ -63,6 +65,10 @@ fn start(
     let handle = runtime.handle().clone();
     let quota = cx.new(|_| QuotaState::new(store, handle, claude, codex));
 
+    cx.bind_keys([
+        KeyBinding::new("cmd-r", Refresh, None),
+        KeyBinding::new("cmd-q", Quit, None),
+    ]);
     cx.on_action(|_: &TogglePopover, cx| {
         let quota = cx.global::<AppState>().quota.clone();
         popover::toggle(quota, cx);

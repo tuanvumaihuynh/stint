@@ -8,10 +8,41 @@ edition = "2024"
 repository = "https://github.com/tuanvumaihuynh/stint"
 publish = false
 
+[workspace.dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+rusqlite = { version = "0.43.0", default-features = false, features = ["bundled", "cache"] }
+rusqlite_migration = { version = "2.9.0", default-features = false }
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
+unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# Noisy pedantic lints for an application workspace.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+# Panics and leftovers never ship.
 unwrap_used = "deny"
 expect_used = "deny"
+get_unwrap = "deny"
+dbg_macro = "deny"
+todo = "deny"
+redundant_clone = "deny"
+
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+# Bundled SQLite is C code; optimizing it keeps debug builds and tests fast.
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

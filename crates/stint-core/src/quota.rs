@@ -15,10 +15,6 @@ impl Percentage {
     pub const FULL: Self = Self(100.0);
 
     /// Clamps finite values into range and rejects `NaN` and infinities.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`CoreError::InvalidPercentage`] when `value` is not finite.
     pub fn new(value: f64) -> Result<Self, CoreError> {
         if value.is_finite() {
             Ok(Self(value.clamp(0.0, 100.0)))

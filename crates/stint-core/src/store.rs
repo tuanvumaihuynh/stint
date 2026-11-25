@@ -1,157 +1,167 @@
+use std::fs;
 use std::path::Path;
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{
+    Connection, ErrorCode, OpenFlags, OptionalExtension, Row, TransactionBehavior, params,
+};
+use rusqlite_migration::{M, Migrations};
 
 use crate::account::{AccountId, AccountProfile, NewAccount};
 use crate::error::StoreError;
-use crate::quota::{Percentage, QuotaSnapshot, QuotaWindow};
+use crate::quota::{QuotaSnapshot, QuotaWindow};
+use crate::sql::Millis;
 
 pub trait QuotaStore {
     /// Adds an account. The first account of a provider becomes active.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the provider already has an account with the same label.
     fn insert_account(
         &mut self,
         account: &NewAccount,
         created_at: DateTime<Utc>,
     ) -> Result<AccountProfile, StoreError>;
 
-    /// # Errors
-    ///
-    /// Fails on database errors or rows that no longer decode.
     fn accounts(&self) -> Result<Vec<AccountProfile>, StoreError>;
 
     /// Makes `id` the only active account of its provider.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`StoreError::AccountNotFound`] for an unknown id.
     fn set_active_account(&mut self, id: AccountId) -> Result<(), StoreError>;
 
-    /// # Errors
-    ///
-    /// Returns [`StoreError::AccountNotFound`] for an unknown account.
     fn record_snapshot(&mut self, snapshot: &QuotaSnapshot) -> Result<(), StoreError>;
 
-    /// # Errors
-    ///
-    /// Fails on database errors or rows that no longer decode.
     fn latest_snapshot(&self, id: AccountId) -> Result<Option<QuotaSnapshot>, StoreError>;
 }
 
-// Append only: each entry moves `user_version` up by one.
-const MIGRATIONS: &[&str] = &["
-    CREATE TABLE accounts (
-        id INTEGER PRIMARY KEY,
-        provider TEXT NOT NULL,
-        label TEXT NOT NULL,
-        email TEXT,
-        is_active INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        UNIQUE (provider, label)
-    );
-    CREATE UNIQUE INDEX accounts_one_active_per_provider
-        ON accounts (provider) WHERE is_active = 1;
+// Append only. Each entry is one schema version tracked in `user_version`.
+static MIGRATION_LIST: [M<'static>; 1] = [M::up(include_str!("../migrations/0001_init.sql"))];
+static MIGRATIONS: Migrations<'static> = Migrations::from_slice(&MIGRATION_LIST);
+const SCHEMA_VERSION: usize = MIGRATION_LIST.len();
 
-    CREATE TABLE quota_snapshots (
-        id INTEGER PRIMARY KEY,
-        account_id INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
-        window_kind TEXT NOT NULL,
-        window_scope TEXT,
-        used_percent REAL NOT NULL,
-        resets_at TEXT,
-        fetched_at TEXT NOT NULL
-    );
-    CREATE INDEX quota_snapshots_account_fetched
-        ON quota_snapshots (account_id, fetched_at);
-"];
+const STATEMENT_CACHE_CAPACITY: usize = 64;
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct SqliteStore {
     conn: Connection,
 }
 
 impl SqliteStore {
-    /// Opens or creates the database in WAL mode and applies pending migrations.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the file cannot be opened, migrations fail, or the schema
-    /// was written by a newer Stint.
+    /// Opens or creates the database in WAL mode, creating parent directories
+    /// and applying pending migrations.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent).map_err(|source| StoreError::Io {
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        }
         let conn = Connection::open(path)?;
-        conn.pragma_update(None, "journal_mode", "WAL")?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        enable_wal(&conn)?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        Self::init(conn)
+    }
+
+    /// Opens an existing, fully migrated database without taking write locks.
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<Self, StoreError> {
+        let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        let conn = Connection::open_with_flags(path, flags)?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.set_prepared_statement_cache_capacity(STATEMENT_CACHE_CAPACITY);
+        let found = schema_version(&conn)?;
+        if found > SCHEMA_VERSION {
+            return Err(StoreError::SchemaTooNew {
+                found,
+                supported: SCHEMA_VERSION,
+            });
+        }
+        if found < SCHEMA_VERSION {
+            return Err(StoreError::SchemaOutdated {
+                found,
+                supported: SCHEMA_VERSION,
+            });
+        }
+        Ok(Self { conn })
+    }
+
+    pub fn open_in_memory() -> Result<Self, StoreError> {
+        Self::init(Connection::open_in_memory()?)
+    }
+
+    fn init(mut conn: Connection) -> Result<Self, StoreError> {
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        conn.busy_timeout(Duration::from_secs(5))?;
-        let mut store = Self { conn };
-        store.migrate()?;
-        Ok(store)
+        conn.pragma_update(None, "temp_store", "MEMORY")?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.set_prepared_statement_cache_capacity(STATEMENT_CACHE_CAPACITY);
+        // Writers take the lock up front so a read-then-write transaction never
+        // fails with SQLITE_BUSY when the app and the CLI write concurrently.
+        conn.set_transaction_behavior(TransactionBehavior::Immediate);
+        migrate(&mut conn)?;
+        Ok(Self { conn })
     }
+}
 
-    fn migrate(&mut self) -> Result<(), StoreError> {
-        let supported = u32::try_from(MIGRATIONS.len()).unwrap_or(u32::MAX);
-        let found: u32 = self
-            .conn
-            .pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if found > supported {
-            return Err(StoreError::SchemaTooNew { found, supported });
+// Switching to WAL upgrades a shared lock to an exclusive one. SQLite reports
+// SQLITE_BUSY for that upgrade without calling the busy handler (to avoid
+// deadlock) when another process opens the same fresh file, so retry here.
+fn enable_wal(conn: &Connection) -> Result<(), StoreError> {
+    let deadline = Instant::now() + BUSY_TIMEOUT;
+    loop {
+        match conn.pragma_update(None, "journal_mode", "WAL") {
+            Err(err)
+                if err.sqlite_error_code() == Some(ErrorCode::DatabaseBusy)
+                    && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(10));
+            }
+            result => return Ok(result?),
         }
-        for (version, sql) in (1u32..).zip(MIGRATIONS).skip(found as usize) {
-            let tx = self.conn.transaction()?;
-            tx.execute_batch(sql)?;
-            tx.pragma_update(None, "user_version", version)?;
-            tx.commit()?;
-        }
-        Ok(())
     }
+}
 
-    fn require_account(conn: &Connection, id: AccountId) -> Result<String, StoreError> {
-        conn.query_row(
-            "SELECT provider FROM accounts WHERE id = ?1",
-            [id.get()],
-            |row| row.get(0),
-        )
+fn schema_version(conn: &Connection) -> Result<usize, StoreError> {
+    let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    // A negative `user_version` was never written by Stint; treat it as unknown and newer.
+    Ok(usize::try_from(version).unwrap_or(usize::MAX))
+}
+
+fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
+    let found = schema_version(conn)?;
+    if found > SCHEMA_VERSION {
+        return Err(StoreError::SchemaTooNew {
+            found,
+            supported: SCHEMA_VERSION,
+        });
+    }
+    match MIGRATIONS.to_latest(conn) {
+        Ok(()) => Ok(()),
+        // The migrator reads `user_version` before its transaction starts, so a
+        // second process opening a fresh database can lose the race and replay
+        // a migration. The winner has already brought the schema up to date.
+        Err(_) if schema_version(conn)? == SCHEMA_VERSION => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn require_account(conn: &Connection, id: AccountId) -> Result<(), StoreError> {
+    conn.prepare_cached("SELECT 1 FROM accounts WHERE id = ?1")?
+        .query_row([id], |_| Ok(()))
         .optional()?
         .ok_or(StoreError::AccountNotFound(id))
-    }
 }
 
-const ACCOUNT_COLUMNS: &str = "id, provider, label, email, is_active, created_at";
+const SELECT_ACCOUNT: &str =
+    "SELECT id, provider, label, email, is_active, created_at FROM accounts";
 
-struct AccountRow {
-    id: i64,
-    provider: String,
-    label: String,
-    email: Option<String>,
-    is_active: bool,
-    created_at: DateTime<Utc>,
-}
-
-impl AccountRow {
-    fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
-        Ok(Self {
-            id: row.get(0)?,
-            provider: row.get(1)?,
-            label: row.get(2)?,
-            email: row.get(3)?,
-            is_active: row.get(4)?,
-            created_at: row.get(5)?,
-        })
-    }
-
-    fn into_profile(self) -> Result<AccountProfile, StoreError> {
-        Ok(AccountProfile {
-            id: AccountId::new(self.id),
-            provider: self.provider.parse()?,
-            label: self.label,
-            email: self.email,
-            is_active: self.is_active,
-            created_at: self.created_at,
-        })
-    }
+fn account_from_row(row: &Row<'_>) -> rusqlite::Result<AccountProfile> {
+    Ok(AccountProfile {
+        id: row.get(0)?,
+        provider: row.get(1)?,
+        label: row.get(2)?,
+        email: row.get(3)?,
+        is_active: row.get(4)?,
+        created_at: row.get::<_, Millis>(5)?.0,
+    })
 }
 
 impl QuotaStore for SqliteStore {
@@ -161,68 +171,75 @@ impl QuotaStore for SqliteStore {
         created_at: DateTime<Utc>,
     ) -> Result<AccountProfile, StoreError> {
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "INSERT INTO accounts (provider, label, email, is_active, created_at)
-             VALUES (?1, ?2, ?3,
-                     NOT EXISTS (SELECT 1 FROM accounts WHERE provider = ?1 AND is_active = 1),
-                     ?4)",
-            params![
-                account.provider.as_str(),
+        let inserted = tx
+            .prepare_cached(
+                "INSERT INTO accounts (provider, label, email, is_active, created_at)
+                 VALUES (?1, ?2, ?3,
+                         NOT EXISTS (SELECT 1 FROM accounts WHERE provider = ?1 AND is_active = 1),
+                         ?4)",
+            )?
+            .execute(params![
+                account.provider,
                 account.label,
                 account.email,
-                created_at
-            ],
-        )?;
+                Millis(created_at)
+            ]);
+        if let Err(err) = inserted {
+            return Err(match err.sqlite_error_code() {
+                Some(ErrorCode::ConstraintViolation) => StoreError::DuplicateAccount {
+                    provider: account.provider,
+                    label: account.label.clone(),
+                },
+                _ => err.into(),
+            });
+        }
         let id = AccountId::new(tx.last_insert_rowid());
-        let row = tx.query_row(
-            &format!("SELECT {ACCOUNT_COLUMNS} FROM accounts WHERE id = ?1"),
-            [id.get()],
-            AccountRow::read,
-        )?;
+        let profile = tx
+            .prepare_cached(&format!("{SELECT_ACCOUNT} WHERE id = ?1"))?
+            .query_row([id], account_from_row)?;
         tx.commit()?;
-        row.into_profile()
+        Ok(profile)
     }
 
     fn accounts(&self) -> Result<Vec<AccountProfile>, StoreError> {
-        let mut stmt = self.conn.prepare(&format!(
-            "SELECT {ACCOUNT_COLUMNS} FROM accounts ORDER BY id"
-        ))?;
-        let rows = stmt.query_map([], AccountRow::read)?;
-        rows.map(|row| row?.into_profile()).collect()
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("{SELECT_ACCOUNT} ORDER BY id"))?;
+        let rows = stmt.query_map([], account_from_row)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     fn set_active_account(&mut self, id: AccountId) -> Result<(), StoreError> {
         let tx = self.conn.transaction()?;
-        let provider = Self::require_account(&tx, id)?;
-        tx.execute(
-            "UPDATE accounts SET is_active = 0 WHERE provider = ?1 AND is_active = 1",
-            [&provider],
-        )?;
-        tx.execute(
-            "UPDATE accounts SET is_active = 1 WHERE id = ?1",
-            [id.get()],
-        )?;
+        require_account(&tx, id)?;
+        tx.prepare_cached(
+            "UPDATE accounts SET is_active = 0
+             WHERE is_active = 1 AND provider = (SELECT provider FROM accounts WHERE id = ?1)",
+        )?
+        .execute([id])?;
+        tx.prepare_cached("UPDATE accounts SET is_active = 1 WHERE id = ?1")?
+            .execute([id])?;
         tx.commit()?;
         Ok(())
     }
 
     fn record_snapshot(&mut self, snapshot: &QuotaSnapshot) -> Result<(), StoreError> {
         let tx = self.conn.transaction()?;
-        Self::require_account(&tx, snapshot.account_id)?;
+        require_account(&tx, snapshot.account_id)?;
         {
-            let mut stmt = tx.prepare(
+            let mut stmt = tx.prepare_cached(
                 "INSERT INTO quota_snapshots
                      (account_id, window_kind, window_scope, used_percent, resets_at, fetched_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )?;
             for window in &snapshot.windows {
                 stmt.execute(params![
-                    snapshot.account_id.get(),
-                    window.kind.as_str(),
+                    snapshot.account_id,
+                    window.kind,
                     window.scope,
-                    window.used.get(),
-                    window.resets_at,
-                    snapshot.fetched_at,
+                    window.used,
+                    window.resets_at.map(Millis),
+                    Millis(snapshot.fetched_at),
                 ])?;
             }
         }
@@ -231,46 +248,36 @@ impl QuotaStore for SqliteStore {
     }
 
     fn latest_snapshot(&self, id: AccountId) -> Result<Option<QuotaSnapshot>, StoreError> {
-        let fetched_at: Option<DateTime<Utc>> = self.conn.query_row(
-            "SELECT MAX(fetched_at) FROM quota_snapshots WHERE account_id = ?1",
-            [id.get()],
-            |row| row.get(0),
-        )?;
-        let Some(fetched_at) = fetched_at else {
-            return Ok(None);
-        };
-
-        let mut stmt = self.conn.prepare(
-            "SELECT window_kind, window_scope, used_percent, resets_at
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT fetched_at, window_kind, window_scope, used_percent, resets_at
              FROM quota_snapshots
-             WHERE account_id = ?1 AND fetched_at = ?2
+             WHERE account_id = ?1
+               AND fetched_at = (SELECT MAX(fetched_at) FROM quota_snapshots WHERE account_id = ?1)
              ORDER BY id",
         )?;
-        let rows = stmt.query_map(params![id.get(), fetched_at], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                row.get::<_, f64>(2)?,
-                row.get::<_, Option<DateTime<Utc>>>(3)?,
-            ))
+        let rows = stmt.query_map([id], |row| {
+            let window = QuotaWindow {
+                kind: row.get(1)?,
+                scope: row.get(2)?,
+                used: row.get(3)?,
+                resets_at: row.get::<_, Option<Millis>>(4)?.map(|m| m.0),
+            };
+            Ok((row.get::<_, Millis>(0)?.0, window))
         })?;
-        let windows = rows
-            .map(|row| {
-                let (kind, scope, used, resets_at) = row?;
-                Ok(QuotaWindow {
-                    kind: kind.parse()?,
-                    scope,
-                    used: Percentage::new(used)?,
-                    resets_at,
-                })
-            })
-            .collect::<Result<Vec<_>, StoreError>>()?;
 
-        Ok(Some(QuotaSnapshot {
-            account_id: id,
-            fetched_at,
-            windows,
-        }))
+        let mut snapshot: Option<QuotaSnapshot> = None;
+        for row in rows {
+            let (fetched_at, window) = row?;
+            snapshot
+                .get_or_insert_with(|| QuotaSnapshot {
+                    account_id: id,
+                    fetched_at,
+                    windows: Vec::new(),
+                })
+                .windows
+                .push(window);
+        }
+        Ok(snapshot)
     }
 }
 
@@ -281,16 +288,14 @@ mod tests {
 
     use super::*;
     use crate::account::ProviderId;
-    use crate::quota::WindowKind;
+    use crate::quota::{Percentage, WindowKind};
 
     fn t0() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap()
     }
 
-    fn open() -> (TempDir, SqliteStore) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = SqliteStore::open(dir.path().join("stint.db")).unwrap();
-        (dir, store)
+    fn store() -> SqliteStore {
+        SqliteStore::open_in_memory().unwrap()
     }
 
     fn new_account(provider: ProviderId, label: &str) -> NewAccount {
@@ -311,37 +316,109 @@ mod tests {
     }
 
     #[test]
-    fn open_enables_wal_and_reopens_cleanly() {
-        let (dir, store) = open();
+    fn migrations_are_valid() {
+        MIGRATIONS.validate().unwrap();
+        assert_eq!(
+            MIGRATIONS
+                .pending_migrations(&Connection::open_in_memory().unwrap())
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn open_creates_parent_dirs_and_enables_wal() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("nested/stint.db");
+        let store = SqliteStore::open(&path).unwrap();
         let mode: String = store
             .conn
             .pragma_query_value(None, "journal_mode", |row| row.get(0))
             .unwrap();
         assert_eq!(mode, "wal");
+        assert_eq!(schema_version(&store.conn).unwrap(), SCHEMA_VERSION);
         drop(store);
-        SqliteStore::open(dir.path().join("stint.db")).unwrap();
+        SqliteStore::open(&path).unwrap();
+    }
+
+    #[test]
+    fn concurrent_first_open_migrates_once() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        SqliteStore::open(&path).map(|_| ())
+                    })
+                })
+                .collect();
+            for handle in handles {
+                handle.join().unwrap().unwrap();
+            }
+        });
+        let store = SqliteStore::open_read_only(&path).unwrap();
+        assert_eq!(store.accounts().unwrap(), Vec::new());
     }
 
     #[test]
     fn open_rejects_newer_schema() {
-        let (dir, store) = open();
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        let store = SqliteStore::open(&path).unwrap();
         store.conn.pragma_update(None, "user_version", 99).unwrap();
         drop(store);
-        let err = SqliteStore::open(dir.path().join("stint.db"))
-            .err()
-            .unwrap();
         assert!(matches!(
-            err,
-            StoreError::SchemaTooNew {
+            SqliteStore::open(&path),
+            Err(StoreError::SchemaTooNew {
                 found: 99,
-                supported: 1
-            }
+                supported: SCHEMA_VERSION
+            })
+        ));
+        assert!(matches!(
+            SqliteStore::open_read_only(&path),
+            Err(StoreError::SchemaTooNew { found: 99, .. })
+        ));
+    }
+
+    #[test]
+    fn read_only_store_reads_but_cannot_write() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        let mut writer = SqliteStore::open(&path).unwrap();
+        let account = writer
+            .insert_account(&new_account(ProviderId::Claude, "personal"), t0())
+            .unwrap();
+
+        let mut reader = SqliteStore::open_read_only(&path).unwrap();
+        assert_eq!(reader.accounts().unwrap(), vec![account]);
+        assert!(matches!(
+            reader.insert_account(&new_account(ProviderId::Codex, "personal"), t0()),
+            Err(StoreError::Sqlite(_))
+        ));
+    }
+
+    #[test]
+    fn read_only_open_rejects_missing_or_unmigrated_database() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("stint.db");
+        assert!(matches!(
+            SqliteStore::open_read_only(&path),
+            Err(StoreError::Sqlite(_))
+        ));
+
+        Connection::open(&path).unwrap();
+        assert!(matches!(
+            SqliteStore::open_read_only(&path),
+            Err(StoreError::SchemaOutdated { found: 0, .. })
         ));
     }
 
     #[test]
     fn first_account_per_provider_becomes_active() {
-        let (_dir, mut store) = open();
+        let mut store = store();
         let mut personal = new_account(ProviderId::Claude, "personal");
         personal.email = Some("me@example.com".into());
         let personal = store.insert_account(&personal, t0()).unwrap();
@@ -362,19 +439,19 @@ mod tests {
 
     #[test]
     fn duplicate_label_per_provider_is_rejected() {
-        let (_dir, mut store) = open();
+        let mut store = store();
         let account = new_account(ProviderId::Codex, "personal");
         store.insert_account(&account, t0()).unwrap();
         assert!(matches!(
             store.insert_account(&account, t0()),
-            Err(StoreError::Sqlite(_))
+            Err(StoreError::DuplicateAccount { provider: ProviderId::Codex, label }) if label == "personal"
         ));
     }
 
     #[test]
     fn set_active_account_switches_within_provider_only() {
-        let (_dir, mut store) = open();
-        let a = store
+        let mut store = store();
+        store
             .insert_account(&new_account(ProviderId::Claude, "a"), t0())
             .unwrap();
         let b = store
@@ -394,12 +471,11 @@ mod tests {
             .map(|acc| acc.id)
             .collect();
         assert_eq!(active, vec![b.id, other.id]);
-        assert_ne!(a.id, b.id);
     }
 
     #[test]
     fn set_active_account_rejects_unknown_id() {
-        let (_dir, mut store) = open();
+        let mut store = store();
         assert!(matches!(
             store.set_active_account(AccountId::new(7)),
             Err(StoreError::AccountNotFound(id)) if id == AccountId::new(7)
@@ -408,7 +484,7 @@ mod tests {
 
     #[test]
     fn latest_snapshot_returns_newest_poll() {
-        let (_dir, mut store) = open();
+        let mut store = store();
         let account = store
             .insert_account(&new_account(ProviderId::Claude, "personal"), t0())
             .unwrap();
@@ -435,7 +511,7 @@ mod tests {
 
     #[test]
     fn record_snapshot_rejects_unknown_account() {
-        let (_dir, mut store) = open();
+        let mut store = store();
         let snapshot = QuotaSnapshot {
             account_id: AccountId::new(3),
             fetched_at: t0(),
@@ -444,6 +520,26 @@ mod tests {
         assert!(matches!(
             store.record_snapshot(&snapshot),
             Err(StoreError::AccountNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn corrupt_stored_values_fail_to_decode() {
+        let mut store = store();
+        let account = store
+            .insert_account(&new_account(ProviderId::Claude, "personal"), t0())
+            .unwrap();
+        store
+            .conn
+            .execute(
+                "INSERT INTO quota_snapshots (account_id, window_kind, used_percent, fetched_at)
+                 VALUES (?1, 'monthly', 1.0, 0)",
+                [account.id],
+            )
+            .unwrap();
+        assert!(matches!(
+            store.latest_snapshot(account.id),
+            Err(StoreError::Sqlite(_))
         ));
     }
 }

@@ -45,7 +45,6 @@ jobs:
           tool: just
       - run: just test
 
-  # The app links AppKit, so it is linted and tested on macOS; on Linux it builds as a stub.
   app:
     name: App (macOS)
     runs-on: macos-latest

@@ -45,6 +45,21 @@ jobs:
           tool: just
       - run: just test
 
+  # The app links AppKit, so it is linted and tested on macOS; on Linux it builds as a stub.
+  app:
+    name: App (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: just app-check
+
   vuln:
     name: Vulnerability Check
     runs-on: ubuntu-latest

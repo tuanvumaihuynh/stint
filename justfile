@@ -17,6 +17,11 @@ lint: fmt-check
 test:
     cargo test --workspace --locked
 
+# Lint and test the macOS menu bar app (macOS only)
+app-check:
+    cargo clippy -p stint-app --all-targets --locked -- -D warnings
+    cargo test -p stint-app --locked
+
 # Audit dependencies against the RustSec advisory database
 vuln:
     cargo audit

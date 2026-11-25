@@ -6,7 +6,7 @@ use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use rusqlite::{Connection, ErrorCode, OpenFlags, TransactionBehavior};
 use rusqlite_migration::{M, Migrations};
 
@@ -91,7 +91,7 @@ impl QuotaStore for SqliteStore {
     fn insert_account(
         &mut self,
         account: &NewAccount,
-        created_at: DateTime<Utc>,
+        created_at: Timestamp,
     ) -> Result<AccountProfile, StoreError> {
         accounts::insert(&mut self.conn, account, created_at)
     }
@@ -171,7 +171,6 @@ fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
     use tempfile::TempDir;
 
     use super::*;
@@ -180,8 +179,8 @@ mod tests {
 
     // Shared with the `accounts` and `snapshots` test modules.
 
-    pub(super) fn t0() -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap()
+    pub(super) fn t0() -> Timestamp {
+        "2026-01-01T12:00:00Z".parse::<Timestamp>().unwrap()
     }
 
     pub(super) fn store() -> SqliteStore {

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use chrono::{DateTime, TimeDelta, Utc};
+use jiff::{SignedDuration, Timestamp};
 
 use crate::account::AccountId;
 use crate::error::CoreError;
@@ -68,11 +68,11 @@ impl WindowKind {
     }
 
     #[must_use]
-    pub const fn duration(self) -> TimeDelta {
+    pub const fn duration(self) -> SignedDuration {
         match self {
-            Self::FiveHour => TimeDelta::hours(5),
-            Self::SevenDay => TimeDelta::days(7),
-            Self::Daily => TimeDelta::days(1),
+            Self::FiveHour => SignedDuration::from_hours(5),
+            Self::SevenDay => SignedDuration::from_hours(24 * 7),
+            Self::Daily => SignedDuration::from_hours(24),
         }
     }
 }
@@ -103,14 +103,14 @@ pub struct QuotaWindow {
     pub kind: WindowKind,
     pub scope: Option<String>,
     pub used: Percentage,
-    pub resets_at: Option<DateTime<Utc>>,
+    pub resets_at: Option<Timestamp>,
 }
 
 /// Every window fetched for one account in a single poll.
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuotaSnapshot {
     pub account_id: AccountId,
-    pub fetched_at: DateTime<Utc>,
+    pub fetched_at: Timestamp,
     pub windows: Vec<QuotaWindow>,
 }
 

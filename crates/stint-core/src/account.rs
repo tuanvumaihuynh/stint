@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 
 use crate::error::CoreError;
 
@@ -77,7 +77,7 @@ pub struct AccountProfile {
     pub label: String,
     pub email: Option<String>,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 #[cfg(test)]

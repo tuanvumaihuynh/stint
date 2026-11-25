@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use rusqlite::{Connection, ErrorCode, OptionalExtension, Row, params};
 
 use crate::account::{AccountId, AccountProfile, NewAccount};
@@ -37,7 +37,7 @@ const ACTIVATE: &str = "UPDATE accounts SET is_active = 1 WHERE id = ?1";
 pub(super) fn insert(
     conn: &mut Connection,
     account: &NewAccount,
-    created_at: DateTime<Utc>,
+    created_at: Timestamp,
 ) -> Result<AccountProfile, StoreError> {
     let tx = conn.transaction()?;
 

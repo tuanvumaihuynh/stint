@@ -98,7 +98,7 @@ fn window_from_row(row: &Row<'_>) -> rusqlite::Result<QuotaWindow> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeDelta;
+    use jiff::SignedDuration;
 
     use super::super::tests::{new_account, store, t0, window};
     use crate::account::{AccountId, ProviderId};
@@ -124,7 +124,7 @@ mod tests {
         opus.resets_at = None;
         let newer = QuotaSnapshot {
             account_id: account.id,
-            fetched_at: t0() + TimeDelta::minutes(5),
+            fetched_at: t0() + SignedDuration::from_mins(5),
             windows: vec![window(WindowKind::FiveHour, 20.0), opus],
         };
         store.record_snapshot(&older).unwrap();
@@ -160,7 +160,7 @@ mod tests {
         };
         let empty = QuotaSnapshot {
             account_id: account.id,
-            fetched_at: t0() + TimeDelta::minutes(5),
+            fetched_at: t0() + SignedDuration::from_mins(5),
             windows: Vec::new(),
         };
         store.record_snapshot(&full).unwrap();
@@ -182,7 +182,7 @@ mod tests {
         };
         let second = QuotaSnapshot {
             account_id: account.id,
-            fetched_at: t0() + TimeDelta::microseconds(300),
+            fetched_at: t0() + SignedDuration::from_micros(300),
             windows: vec![window(WindowKind::FiveHour, 20.0)],
         };
         store.record_snapshot(&first).unwrap();

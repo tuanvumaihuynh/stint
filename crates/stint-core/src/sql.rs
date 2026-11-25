@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 
 use crate::account::{AccountId, ProviderId};
@@ -6,20 +6,20 @@ use crate::quota::{Percentage, WindowKind};
 
 /// UTC timestamp stored as Unix milliseconds; sub-millisecond precision is dropped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Millis(pub(crate) DateTime<Utc>);
+pub(crate) struct Millis(pub(crate) Timestamp);
 
 impl ToSql for Millis {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(self.0.timestamp_millis().into())
+        Ok(self.0.as_millisecond().into())
     }
 }
 
 impl FromSql for Millis {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let millis = value.as_i64()?;
-        DateTime::from_timestamp_millis(millis)
+        Timestamp::from_millisecond(millis)
             .map(Self)
-            .ok_or(FromSqlError::OutOfRange(millis))
+            .map_err(|_| FromSqlError::OutOfRange(millis))
     }
 }
 

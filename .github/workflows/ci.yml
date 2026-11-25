@@ -8,8 +8,11 @@ on:
 permissions:
   contents: read
 
+# Pull requests share one group per branch so a new push cancels the old run.
+# Each push to main gets its own group: a group keeps only one pending run,
+# so a shared group would drop queued main commits.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:

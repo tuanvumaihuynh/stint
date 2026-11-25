@@ -1208,6 +1208,7 @@ dependencies = [
 name = "stint-providers"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "jiff",
  "reqwest",
  "serde",

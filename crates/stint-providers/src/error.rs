@@ -21,6 +21,8 @@ pub enum ProviderError {
         #[source]
         source: io::Error,
     },
+    #[error("usage answer is for another account than the signed-in one")]
+    AccountMismatch,
     #[error("provider answered HTTP {status}")]
     Status { status: u16 },
     #[error("request failed: {0}")]

@@ -1,4 +1,5 @@
 mod claude;
+mod codex;
 mod error;
 mod http;
 mod keychain;
@@ -8,6 +9,7 @@ use std::future::Future;
 use stint_core::{ProviderId, QuotaWindow};
 
 pub use claude::ClaudeProvider;
+pub use codex::CodexProvider;
 pub use error::ProviderError;
 pub use http::client as http_client;
 

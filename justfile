@@ -11,11 +11,11 @@ fmt-check:
 
 # Run clippy across all workspace targets
 lint:
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --locked -- -D warnings
 
 # Run offline unit tests across the workspace
 test:
-    cargo test --workspace
+    cargo test --workspace --locked
 
 # Run all pre-PR verification checks
 check: fmt-check lint test

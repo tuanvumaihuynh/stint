@@ -17,7 +17,7 @@ lint: fmt-check
 test:
     cargo test --workspace --locked
 
-# Build the Rust core for the macOS app and write its Swift bindings (macOS only)
+# Build the Rust core for the macOS app and write its Swift bindings: debug, release, or universal (macOS only)
 ffi profile="debug":
     macos/scripts/build-ffi.sh {{profile}}
 
@@ -35,6 +35,14 @@ app-test:
 app-snapshot dir="target/snapshots": app-build
     macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint --snapshot "$(cd {{justfile_directory()}} && mkdir -p {{dir}} && cd {{dir}} && pwd)"
     macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint --window-snapshot "$(cd {{justfile_directory()}} && mkdir -p {{dir}} && cd {{dir}} && pwd)"
+
+# Build the release zip and disk image into target/dist, e.g. `just release 0.1.0` (macOS only)
+release version:
+    macos/scripts/release.sh {{version}}
+
+# Launch the release disk image against an older database, e.g. `just smoke-test 0.1.0` (macOS only)
+smoke-test version:
+    macos/scripts/smoke-test.sh target/dist/Stint-{{version}}.dmg
 
 # Audit dependencies against the RustSec advisory database
 vuln:

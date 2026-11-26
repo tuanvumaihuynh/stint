@@ -13,7 +13,9 @@ use std::time::Duration;
 use anyhow::{Context as _, bail};
 use jiff::Timestamp;
 use stint_core::{NewAccount, ProviderId, QuotaStore, SqliteStore};
-use stint_providers::{Accounts, Enrolled, SignIn, Vault, antigravity, new_credential_key};
+use stint_providers::{
+    Accounts, CliProvider, Enrolled, SignIn, Vault, antigravity, new_credential_key,
+};
 
 const USAGE: &str = "usage: stint-dev add-account <claude|codex|antigravity> <name>\n       \
     stint-dev remove-account <claude|codex|antigravity> <name>\n       \
@@ -60,10 +62,9 @@ fn add(provider: ProviderId, name: &str) -> anyhow::Result<()> {
         .any(|account| account.provider == provider && account.label == name);
     anyhow::ensure!(!taken, "a {provider} account named {name:?} already exists");
 
-    let enrolled = if provider == ProviderId::Antigravity {
-        sign_in_in_browser()?
-    } else {
-        sign_in_with_cli(provider)?
+    let enrolled = match CliProvider::of(provider) {
+        Some(cli) => sign_in_with_cli(cli, provider)?,
+        None => sign_in_in_browser()?,
     };
 
     let key = new_credential_key(provider);
@@ -93,9 +94,9 @@ fn add(provider: ProviderId, name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn sign_in_with_cli(provider: ProviderId) -> anyhow::Result<Enrolled> {
+fn sign_in_with_cli(cli: CliProvider, provider: ProviderId) -> anyhow::Result<Enrolled> {
     let data_dir = stint_core::data_dir().context("find the home directory")?;
-    let attempt = SignIn::start(provider, &data_dir)?;
+    let attempt = SignIn::start(cli, &data_dir)?;
     println!("Signing in to {provider} in your browser. Finish there, then come back.");
     let status = attempt
         .command()?

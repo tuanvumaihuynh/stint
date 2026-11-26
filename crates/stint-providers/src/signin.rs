@@ -45,10 +45,29 @@ pub struct Enrolled {
     pub plan: Option<String>,
 }
 
+/// A provider whose own CLI signs accounts in. Antigravity accounts sign in through
+/// the browser instead; see [`crate::antigravity`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CliProvider {
+    Claude,
+    Codex,
+}
+
+impl CliProvider {
+    /// The CLI that signs `provider`'s accounts in, if it has one.
+    pub fn of(provider: ProviderId) -> Option<Self> {
+        match provider {
+            ProviderId::Claude => Some(Self::Claude),
+            ProviderId::Codex => Some(Self::Codex),
+            ProviderId::Antigravity => None,
+        }
+    }
+}
+
 /// One sign-in attempt.
 #[derive(Debug)]
 pub struct SignIn {
-    provider: ProviderId,
+    provider: CliProvider,
     root: PathBuf,
     // The config home handed to the CLI, spelled exactly as passed.
     home: String,
@@ -58,10 +77,7 @@ pub struct SignIn {
 
 impl SignIn {
     /// Prepares a fresh attempt under `<data_dir>/signin/`.
-    pub fn start(provider: ProviderId, data_dir: &Path) -> Result<Self, ProviderError> {
-        if provider == ProviderId::Antigravity {
-            return Err(ProviderError::Unsupported("Antigravity accounts".into()));
-        }
+    pub fn start(provider: CliProvider, data_dir: &Path) -> Result<Self, ProviderError> {
         let root = data_dir.join(SIGNIN_DIR).join(random_name());
         let home = root.join("home");
         for dir in [&home, &root.join("work")] {
@@ -87,7 +103,7 @@ impl SignIn {
     /// browser, prints a link, and Claude Code also reads a pasted code from stdin.
     pub fn command(&self) -> Result<Command, ProviderError> {
         let mut command = match self.provider {
-            ProviderId::Claude => {
+            CliProvider::Claude => {
                 let mut command = Command::new(find_program("claude")?);
                 command
                     .args(["auth", "login", "--claudeai"])
@@ -99,7 +115,7 @@ impl SignIn {
                 }
                 command
             }
-            ProviderId::Codex => {
+            CliProvider::Codex => {
                 let mut command = Command::new(find_program("codex")?);
                 command
                     .args(["-c", r#"cli_auth_credentials_store="file""#, "login"])
@@ -109,7 +125,6 @@ impl SignIn {
                 }
                 command
             }
-            ProviderId::Antigravity => unreachable!("rejected by start"),
         };
         command.current_dir(self.root.join("work"));
         Ok(command)
@@ -119,9 +134,8 @@ impl SignIn {
     pub fn finish(&self) -> Result<Enrolled, ProviderError> {
         let home = Path::new(&self.home);
         match self.provider {
-            ProviderId::Claude => claude::import(home, &self.claude_slot()),
-            ProviderId::Codex => codex::import(home),
-            ProviderId::Antigravity => unreachable!("rejected by start"),
+            CliProvider::Claude => claude::import(home, &self.claude_slot()),
+            CliProvider::Codex => codex::import(home),
         }
     }
 
@@ -132,7 +146,7 @@ impl SignIn {
 
 impl Drop for SignIn {
     fn drop(&mut self) {
-        if self.provider == ProviderId::Claude {
+        if self.provider == CliProvider::Claude {
             let slot = self.claude_slot();
             let [overflow_a, overflow_b] = slot.overflow_services();
             for service in [&slot.service, &overflow_a, &overflow_b] {
@@ -208,8 +222,8 @@ mod tests {
     #[test]
     fn attempts_get_private_fresh_directories_that_drop_removes() {
         let data = tempfile::TempDir::new().unwrap();
-        let first = SignIn::start(ProviderId::Codex, data.path()).unwrap();
-        let second = SignIn::start(ProviderId::Codex, data.path()).unwrap();
+        let first = SignIn::start(CliProvider::Codex, data.path()).unwrap();
+        let second = SignIn::start(CliProvider::Codex, data.path()).unwrap();
         assert_ne!(first.root, second.root);
 
         let mode = fs::metadata(&first.home).unwrap().permissions().mode();
@@ -223,17 +237,18 @@ mod tests {
     #[test]
     fn codex_missing_login_is_auth_missing() {
         let data = tempfile::TempDir::new().unwrap();
-        let attempt = SignIn::start(ProviderId::Codex, data.path()).unwrap();
+        let attempt = SignIn::start(CliProvider::Codex, data.path()).unwrap();
         assert!(matches!(attempt.finish(), Err(ProviderError::AuthMissing)));
     }
 
     #[test]
-    fn antigravity_is_unsupported() {
-        let data = tempfile::TempDir::new().unwrap();
-        assert!(matches!(
-            SignIn::start(ProviderId::Antigravity, data.path()),
-            Err(ProviderError::Unsupported(_))
-        ));
+    fn only_claude_and_codex_sign_in_through_a_cli() {
+        assert_eq!(
+            CliProvider::of(ProviderId::Claude),
+            Some(CliProvider::Claude)
+        );
+        assert_eq!(CliProvider::of(ProviderId::Codex), Some(CliProvider::Codex));
+        assert_eq!(CliProvider::of(ProviderId::Antigravity), None);
     }
 
     #[test]
@@ -256,15 +271,15 @@ mod tests {
     fn commands_isolate_the_config_home() {
         // Only meaningful where the CLIs are installed.
         let data = tempfile::TempDir::new().unwrap();
-        for provider in [ProviderId::Claude, ProviderId::Codex] {
+        for provider in [CliProvider::Claude, CliProvider::Codex] {
             let attempt = SignIn::start(provider, data.path()).unwrap();
             let Ok(command) = attempt.command() else {
                 continue;
             };
             let home = OsString::from(&attempt.home);
             let (var, removed) = match provider {
-                ProviderId::Claude => ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN"),
-                _ => ("CODEX_HOME", "OPENAI_API_KEY"),
+                CliProvider::Claude => ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN"),
+                CliProvider::Codex => ("CODEX_HOME", "OPENAI_API_KEY"),
             };
             assert_eq!(sets(&command, var), Some(home));
             assert!(removes(&command, removed));

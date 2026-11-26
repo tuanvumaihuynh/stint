@@ -1,33 +1,41 @@
 # Stint
 
-Stint is a macOS menu bar utility that tracks subscription usage limits and local coding session metrics across Claude, Codex, and Gemini.
+Stint is a macOS menu bar app that tracks subscription usage limits across several Claude, Codex, and Antigravity accounts.
 
-Stint signs accounts in through the providers' own CLIs, keeps each login in the macOS Keychain, stores usage history in a single local SQLite database, and shows it in a native Swift app built on a Rust core.
+It keeps each login in the macOS Keychain, stores usage history in one local SQLite database, and shows it in a native Swift app built on a Rust core.
 
 > [!WARNING]
-> **Stint is in pre-release development for macOS.** Application crates are being built, and live quota checks rely on internal CLI OAuth endpoints that providers may change without notice.
+> **Stint is in pre-release development for macOS.** Quota checks use internal endpoints that providers may change without notice. Antigravity quota comes from Google's internal API, and Google may restrict accounts that use third-party tools.
 
 ## Run locally
 
 Requirements: macOS, Xcode, [rustup](https://rustup.rs) (the pinned toolchain installs on first build), and [just](https://github.com/casey/just).
 
-Start the menu bar app:
+Start the app:
 
 ```sh
 just app
 ```
 
-The Stint icon appears in the menu bar; there is no Dock icon. Click it to open the menu. The app refreshes every account when it starts and every five minutes.
+The Stint icon appears in the menu bar. Click it to open the menu, or choose **Open Stint** for the window, where you add, sign in again, rename, and remove accounts. Stint shows in the Dock only while the window is open. It refreshes every account when it starts and every five minutes.
 
-Until the desktop window exists, accounts are added from the terminal. Stint runs the provider's own sign-in (`claude auth login` or `codex login`) in a private directory, so your normal CLI login is untouched, then saves the login to your Keychain and renews it as it expires:
+How accounts sign in:
+
+- **Claude and Codex:** Stint runs the provider's own sign-in (`claude auth login` or `codex login`) in a private directory, so your normal CLI login is untouched. The CLI must be installed.
+- **Antigravity:** Stint opens Google's sign-in page in your browser and receives the answer on `localhost:51121`.
+
+Stint then saves the login to your Keychain and renews it as it expires.
+
+Debug builds can also add accounts from the terminal, and print an account's live quota:
 
 ```sh
 just add-account claude Personal
-just add-account codex Work
+just add-account antigravity Personal
+just usage antigravity Personal
 just remove-account claude Personal
 ```
 
-To see the menu with made-up accounts, pass a mock scenario: `default`, `refreshing`, `single`, `busy`, `offline`, or `empty`.
+To see the app with made-up accounts, pass a mock scenario: `default`, `refreshing`, `single`, `busy`, `offline`, `empty`, or `antigravity`.
 
 ```sh
 just app default
@@ -47,13 +55,13 @@ List available tasks with `just --list`, and run formatting, clippy, and unit te
 just check
 ```
 
-On macOS, `just app-test` runs the app's unit tests, and `just app-snapshot` photographs the menu in every mock scenario, in light and dark mode, into `target/snapshots/`.
+On macOS, `just app-test` runs the app's unit tests, and `just app-snapshot` photographs the menu and the window in every mock scenario, in light and dark mode, into `target/snapshots/`.
 
 The macOS app lives in `macos/`, an Xcode project. Its Swift code calls the Rust core through `crates/stint-ffi`, whose static library and generated Swift bindings `just ffi` writes to `macos/Generated/`. Run `just ffi` once before building in Xcode.
 
 Workspace crates live under `crates/`:
 
 - `crates/stint-core`: Domain types, SQLite WAL storage, and pace calculations.
-- `crates/stint-providers`: Account sign-in through the provider CLIs, Keychain logins with renewal, and subscription quota clients for Claude and Codex.
+- `crates/stint-providers`: Account sign-in (through the provider CLIs, or the browser for Antigravity), Keychain logins with renewal, and quota clients for Claude, Codex, and Antigravity.
 - `crates/stint-ffi`: The core as the macOS app sees it, exported to Swift with UniFFI.
-- `crates/stint-dev`: The `add-account` and `remove-account` development commands.
+- `crates/stint-dev`: The `add-account`, `remove-account`, and `usage` development commands.

@@ -1,0 +1,8 @@
+{
+  "plan_type": "free",
+  "rate_limit": {
+    "primary_window": { "used_percent": 4, "limit_window_seconds": 2592000, "reset_at": 1790628078 },
+    "secondary_window": null
+  },
+  "additional_rate_limits": null
+}

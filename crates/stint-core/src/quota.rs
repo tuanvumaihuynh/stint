@@ -53,10 +53,11 @@ pub enum WindowKind {
     FiveHour,
     SevenDay,
     Daily,
+    ThirtyDay,
 }
 
 impl WindowKind {
-    pub const ALL: [Self; 3] = [Self::FiveHour, Self::SevenDay, Self::Daily];
+    pub const ALL: [Self; 4] = [Self::FiveHour, Self::SevenDay, Self::Daily, Self::ThirtyDay];
 
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -64,6 +65,7 @@ impl WindowKind {
             Self::FiveHour => "five_hour",
             Self::SevenDay => "seven_day",
             Self::Daily => "daily",
+            Self::ThirtyDay => "thirty_day",
         }
     }
 
@@ -73,6 +75,7 @@ impl WindowKind {
             Self::FiveHour => SignedDuration::from_hours(5),
             Self::SevenDay => SignedDuration::from_hours(24 * 7),
             Self::Daily => SignedDuration::from_hours(24),
+            Self::ThirtyDay => SignedDuration::from_hours(24 * 30),
         }
     }
 }

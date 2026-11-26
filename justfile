@@ -24,12 +24,12 @@ ffi profile="debug":
 # Build the macOS app with Xcode; pass `Release` for an optimized build (macOS only)
 app-build config="Debug":
     just ffi {{ if config == "Release" { "release" } else { "debug" } }}
-    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration {{config}} -derivedDataPath macos/build build
+    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration {{config}} -destination "platform=macOS,arch=$(uname -m)" -derivedDataPath macos/build build
 
 # Run the macOS app's unit tests (macOS only)
 app-test:
     just ffi
-    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration Debug -derivedDataPath macos/build test
+    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration Debug -destination "platform=macOS,arch=$(uname -m)" -derivedDataPath macos/build test
 
 # Photograph the status menu in every mock scenario, light and dark (macOS only)
 app-snapshot dir="target/snapshots": app-build

@@ -52,7 +52,7 @@ extension Provider {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
-        case .gemini: "Gemini"
+        case .antigravity: "Antigravity"
         }
     }
 
@@ -61,8 +61,13 @@ extension Provider {
         switch self {
         case .claude: "Anthropic subscription (Pro, Max, Team)"
         case .codex: "ChatGPT subscription (Plus, Pro, Team)"
-        case .gemini: "Google AI subscription"
+        case .antigravity: "Google AI subscription (Pro, Ultra)"
         }
+    }
+
+    /// Who the browser sign-in is with.
+    var signInService: String {
+        self == .antigravity ? "Google" : title
     }
 
     /// The provider's mark in the asset catalog.
@@ -70,16 +75,16 @@ extension Provider {
         switch self {
         case .claude: "ProviderClaude"
         case .codex: "ProviderCodex"
-        case .gemini: "ProviderGemini"
+        case .antigravity: "ProviderAntigravity"
         }
     }
 
     /// Whether Stint can add accounts of this provider yet.
     var available: Bool {
-        self != .gemini
+        true
     }
 
-    static let all: [Provider] = [.claude, .codex, .gemini]
+    static let all: [Provider] = [.claude, .codex, .antigravity]
 }
 
 /// A provider's own mark on a rounded tile, as its app icon shows it.
@@ -97,16 +102,16 @@ struct ProviderLogo: View {
             case .codex:
                 shape.fill(Color(hex: 0x0D0D0D))
                 mark.foregroundStyle(.white)
-            case .gemini:
+            case .antigravity:
                 shape.fill(.white)
                 shape.strokeBorder(.black.opacity(0.1), lineWidth: 0.5)
-                mark.foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: 0x4796E3), Color(hex: 0x9177C7), Color(hex: 0xCA6673)],
-                        startPoint: .bottomLeading,
-                        endPoint: .topTrailing
-                    )
-                )
+                // The full-color mark carries its own margin.
+                Image(provider.logo)
+                    .renderingMode(.original)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .padding(size * 0.06)
             }
         }
         .frame(width: size, height: size)

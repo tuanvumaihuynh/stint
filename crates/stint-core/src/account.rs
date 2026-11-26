@@ -30,18 +30,18 @@ impl fmt::Display for AccountId {
 pub enum ProviderId {
     Claude,
     Codex,
-    Gemini,
+    Antigravity,
 }
 
 impl ProviderId {
-    pub const ALL: [Self; 3] = [Self::Claude, Self::Codex, Self::Gemini];
+    pub const ALL: [Self; 3] = [Self::Claude, Self::Codex, Self::Antigravity];
 
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
-            Self::Gemini => "gemini",
+            Self::Antigravity => "antigravity",
         }
     }
 }

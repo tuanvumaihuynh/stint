@@ -100,7 +100,7 @@ impl FromStr for WindowKind {
 /// One rolling quota window as reported by a provider.
 ///
 /// `scope` narrows the window to a model family (for example `opus` or a
-/// Gemini model id); `None` means the window covers the whole plan.
+/// Antigravity model group); `None` means the window covers the whole plan.
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuotaWindow {
     pub kind: WindowKind,

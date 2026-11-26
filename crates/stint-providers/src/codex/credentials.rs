@@ -145,7 +145,7 @@ mod tests {
     fn login(enrolled: &Enrolled) -> &CodexLogin {
         match &enrolled.credential {
             Credential::Codex(login) => login,
-            Credential::Claude(_) => panic!("not a Codex login"),
+            _ => panic!("not a Codex login"),
         }
     }
 

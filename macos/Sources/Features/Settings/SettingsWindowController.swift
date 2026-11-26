@@ -33,6 +33,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     /// Brings the window forward on `pane`.
     func show(_ pane: Pane) {
         model.show(pane)
+        // SwiftUI misses a pane chosen before the window first shows, and leaves "Untitled".
+        window?.title = pane.title
         let opening = window?.isVisible == false
         // A menu bar app shows in the Dock and the app switcher only while its window is open.
         NSApp.setActivationPolicy(.regular)
@@ -59,6 +61,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         /// keyboard from the app the user is typing in.
         func present(_ pane: Pane) {
             model.show(pane)
+            window?.title = pane.title
             window?.orderFrontRegardless()
         }
     #endif

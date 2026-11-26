@@ -46,9 +46,9 @@
         }
 
         private var shots: [Shot] {
-            let flow = { (step: SignInFlow.Step) in
+            let flow = { (step: SignInFlow.Step, provider: Provider) in
                 { @MainActor (window: SettingsWindowController, _: CoreClient) in
-                    window.model.signIn = SignInFlow(previewing: step, provider: .claude, nickname: "Client")
+                    window.model.signIn = SignInFlow(previewing: step, provider: provider, nickname: "Client")
                 }
             }
             return [
@@ -58,16 +58,25 @@
                 Shot(name: "accounts-remove", scenario: "default", pane: .accounts) { window, core in
                     window.model.removing = core.overview.accounts.first { $0.name == "Work" }
                 },
-                Shot(name: "add-1-provider", scenario: "default", pane: .accounts, prepare: flow(.provider)),
-                Shot(name: "add-2-nickname", scenario: "default", pane: .accounts, prepare: flow(.nickname)),
-                Shot(name: "add-3-waiting", scenario: "default", pane: .accounts, prepare: flow(.waiting)),
+                Shot(name: "add-1-provider", scenario: "default", pane: .accounts, prepare: flow(.provider, .claude)),
+                Shot(name: "add-2-nickname", scenario: "default", pane: .accounts, prepare: flow(.nickname, .claude)),
+                Shot(name: "add-3-waiting", scenario: "default", pane: .accounts, prepare: flow(.waiting, .claude)),
                 Shot(
                     name: "add-4-connected", scenario: "default", pane: .accounts,
-                    prepare: flow(.connected(email: "client@example.com", plan: "Max 5x"))
+                    prepare: flow(.connected(email: "client@example.com", plan: "Max 5x"), .claude)
                 ),
                 Shot(
                     name: "add-4-failed", scenario: "default", pane: .accounts,
-                    prepare: flow(.failed("The sign-in page expired or was closed before Claude returned a session."))
+                    prepare: flow(.failed("The sign-in page expired or was closed before Claude returned a session."), .claude)
+                ),
+                Shot(name: "accounts-antigravity", scenario: "antigravity", pane: .accounts),
+                Shot(
+                    name: "add-1-provider-antigravity", scenario: "antigravity", pane: .accounts,
+                    prepare: flow(.provider, .antigravity)
+                ),
+                Shot(
+                    name: "add-3-waiting-antigravity", scenario: "antigravity", pane: .accounts,
+                    prepare: flow(.waiting, .antigravity)
                 ),
                 Shot(name: "menubar", scenario: "default", pane: .menuBar) { _, core in
                     if let side = core.overview.accounts.first(where: { $0.name == "Side" }) {

@@ -12,7 +12,7 @@ use crate::quota::{AccountQuota, FetchError};
 pub enum Provider {
     Claude,
     Codex,
-    Gemini,
+    Antigravity,
 }
 
 impl From<ProviderId> for Provider {
@@ -20,7 +20,7 @@ impl From<ProviderId> for Provider {
         match provider {
             ProviderId::Claude => Self::Claude,
             ProviderId::Codex => Self::Codex,
-            ProviderId::Gemini => Self::Gemini,
+            ProviderId::Antigravity => Self::Antigravity,
         }
     }
 }
@@ -30,7 +30,7 @@ impl From<Provider> for ProviderId {
         match provider {
             Provider::Claude => Self::Claude,
             Provider::Codex => Self::Codex,
-            Provider::Gemini => Self::Gemini,
+            Provider::Antigravity => Self::Antigravity,
         }
     }
 }
@@ -191,6 +191,12 @@ fn issue(account: &AccountQuota, offline: bool, now: Timestamp) -> Option<Issue>
         FetchError::RateLimited { .. } => Some(issue(
             "Rate limited",
             "retrying on refresh".to_owned(),
+            Severity::Warning,
+            false,
+        )),
+        FetchError::NeedsSetup => Some(issue(
+            "Needs setup",
+            format!("open {name} once, then refresh"),
             Severity::Warning,
             false,
         )),

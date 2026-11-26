@@ -57,6 +57,73 @@ pub(crate) async fn post_json(
     })
 }
 
+/// Posts `fields` as an encoded form, as OAuth token endpoints take them, and reads the
+/// answer, leaving failed statuses to the caller.
+pub(crate) async fn post_form(
+    client: &reqwest::Client,
+    url: &str,
+    fields: &[(&str, &str)],
+) -> Result<Answer, ProviderError> {
+    let response = client
+        .post(url)
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(form(fields))
+        .send()
+        .await?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response.bytes().await?.to_vec();
+    Ok(Answer {
+        status,
+        headers,
+        body,
+    })
+}
+
+/// `key=value&…` with both sides percent-encoded.
+pub(crate) fn form(fields: &[(&str, &str)]) -> String {
+    fields
+        .iter()
+        .map(|(key, value)| format!("{}={}", encode(key), encode(value)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+/// Percent-encodes everything but the unreserved characters of RFC 3986.
+pub(crate) fn encode(text: &str) -> String {
+    use std::fmt::Write as _;
+
+    let mut encoded = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
+            encoded.push(char::from(byte));
+        } else {
+            // Writing to a String cannot fail.
+            write!(encoded, "%{byte:02X}").ok();
+        }
+    }
+    encoded
+}
+
+/// Undoes percent-encoding and `+` for spaces, as in a query string. `None` for a
+/// malformed escape or text that is not UTF-8.
+pub(crate) fn decode(text: &str) -> Option<String> {
+    let mut bytes = Vec::with_capacity(text.len());
+    let mut input = text.bytes();
+    while let Some(byte) = input.next() {
+        match byte {
+            b'%' => {
+                let high = char::from(input.next()?).to_digit(16)?;
+                let low = char::from(input.next()?).to_digit(16)?;
+                bytes.push(u8::try_from(high * 16 + low).ok()?);
+            }
+            b'+' => bytes.push(b' '),
+            byte => bytes.push(byte),
+        }
+    }
+    String::from_utf8(bytes).ok()
+}
+
 pub(crate) fn check_status(status: StatusCode, headers: &HeaderMap) -> Result<(), ProviderError> {
     if status.is_success() {
         return Ok(());
@@ -124,6 +191,19 @@ mod tests {
                 Err(ProviderError::RateLimited { retry_after: None })
             ));
         }
+    }
+
+    #[test]
+    fn forms_encode_and_decode() {
+        assert_eq!(
+            form(&[
+                ("code", "4/0Ab c"),
+                ("redirect_uri", "http://localhost:1/x")
+            ]),
+            "code=4%2F0Ab%20c&redirect_uri=http%3A%2F%2Flocalhost%3A1%2Fx"
+        );
+        assert_eq!(decode("4%2F0Ab+c").as_deref(), Some("4/0Ab c"));
+        assert_eq!(decode("bad%2"), None);
     }
 
     #[test]

@@ -126,7 +126,9 @@ struct AccountRowView: View {
                 .frame(minHeight: 22)
                 detail
             }
-            Spacer(minLength: 8)
+            // Readings with a line per model group get the room before "Updated" does.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
             VStack(alignment: .trailing, spacing: 5) {
                 HStack(spacing: 8) {
                     status
@@ -137,6 +139,7 @@ struct AccountRowView: View {
                     Text(updated)
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
+                        .fixedSize()
                 }
             }
         }
@@ -155,10 +158,16 @@ struct AccountRowView: View {
                     .font(.callout)
             }
         } else {
-            Text(account.readings)
-                .font(.callout)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
+            // One line per model group; a group's line never breaks.
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(account.readings.split(separator: "\n").enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .lineLimit(1)
+                }
+            }
+            .font(.callout)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -198,26 +207,35 @@ struct AccountRowView: View {
 private struct EmptyAccounts: View {
     let add: () -> Void
 
+    // Laid out by hand: ContentUnavailableView puts its actions side by side on a tinted
+    // card, which cuts the Keychain note off.
     var body: some View {
-        ContentUnavailableView {
-            Label {
-                Text("No Accounts Yet")
-            } icon: {
-                Image(systemName: "person.crop.circle.badge.plus")
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.secondary, .tint)
-            }
-        } description: {
-            Text("Add a Claude or Codex subscription to track 5-hour and weekly usage limits in Stint and your menu bar.")
-        } actions: {
+        VStack(spacing: 0) {
+            Image(systemName: "person.crop.circle.badge.plus")
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.secondary, .tint)
+                .font(.system(size: 44))
+                .padding(.bottom, 14)
+            Text("No Accounts Yet")
+                .font(.title2.weight(.semibold))
+                .padding(.bottom, 6)
+            Text("Add a Claude, Codex, or Antigravity subscription to track its usage limits in Stint and your menu bar.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 18)
             Button("Add Account…", action: add)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .padding(.bottom, 12)
             Label("Sessions stay in your macOS Keychain", systemImage: "lock")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
-                .padding(.top, 8)
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

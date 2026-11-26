@@ -83,6 +83,8 @@ pub struct AccountProfile {
     pub email: Option<String>,
     pub plan: Option<String>,
     pub credential_key: String,
+    /// Whether the status menu lists the account.
+    pub shown_in_menu: bool,
     pub created_at: Timestamp,
 }
 

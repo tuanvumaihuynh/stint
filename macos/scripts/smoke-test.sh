@@ -38,9 +38,10 @@ binary="$work/Stint.app/Contents/MacOS/Stint"
 old_database() {
     data="$1"
     mkdir -p "$data"
-    for migration in $(find "$migrations" -name '*.sql' | sort | head -n "$old_schema"); do
-        sqlite3 "$data/stint.db" <"$migration"
-    done
+    find "$migrations" -name '*.sql' | sort | head -n "$old_schema" |
+        while IFS= read -r migration; do
+            sqlite3 "$data/stint.db" <"$migration"
+        done
     sqlite3 "$data/stint.db" "PRAGMA user_version = $old_schema;
         INSERT INTO accounts (provider, label, credential_key, created_at)
         VALUES ('gemini', 'Smoke', 'smoke-test-missing-key', 0);"

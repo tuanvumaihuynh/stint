@@ -30,18 +30,16 @@ release)
     lib="$root/target/release/libstint_ffi.a"
     ;;
 universal)
-    targets="aarch64-apple-darwin x86_64-apple-darwin"
-    # shellcheck disable=SC2086 # one word per target
-    rustup target add $targets >/dev/null
-    slices=""
-    for target in $targets; do
+    rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null
+    # The slices go in the positional arguments, so paths with spaces stay whole.
+    set --
+    for target in aarch64-apple-darwin x86_64-apple-darwin; do
         cargo build --locked -p stint-ffi --release --target "$target"
-        slices="$slices $root/target/$target/release/libstint_ffi.a"
+        set -- "$@" "$root/target/$target/release/libstint_ffi.a"
     done
     lib="$root/target/universal/release/libstint_ffi.a"
     mkdir -p "$(dirname "$lib")"
-    # shellcheck disable=SC2086 # one word per slice
-    lipo -create $slices -output "$lib"
+    lipo -create "$@" -output "$lib"
     ;;
 esac
 

@@ -1,8 +1,11 @@
 #!/bin/sh
 # Launches the app from a release disk image against a database from an older Stint, and
-# checks that it opens and migrates. Runs every architecture this Mac can run.
+# checks that it opens and migrates, natively.
 #
 #   macos/scripts/smoke-test.sh target/dist/Stint-0.1.0.dmg
+#
+# Set STINT_SMOKE_INTEL=1 to also run the Intel slice under Rosetta on Apple silicon. It
+# is opt-in: macOS shows a notice about Intel apps after it runs one.
 #
 # The database is built from the migrations of the oldest schema that still has users,
 # so it is always what that release wrote. Nothing touches the real Stint data.
@@ -87,8 +90,12 @@ check() {
 }
 
 check "$(uname -m)"
-# Apple silicon Macs with Rosetta also run the Intel slice.
-if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then
-    check x86_64 arch -x86_64
+if [ "${STINT_SMOKE_INTEL:-}" = 1 ]; then
+    if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then
+        check x86_64 arch -x86_64
+    else
+        echo "STINT_SMOKE_INTEL needs an Apple silicon Mac with Rosetta" >&2
+        exit 1
+    fi
 fi
 echo "smoke test passed"

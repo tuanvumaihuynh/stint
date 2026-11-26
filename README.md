@@ -57,7 +57,7 @@ just check
 
 On macOS, `just app-test` runs the app's unit tests, and `just app-snapshot` photographs the menu and the window in every mock scenario, in light and dark mode, into `target/snapshots/`.
 
-`just release 0.1.0` builds what ships: one universal app for Apple silicon and Intel Macs, ad-hoc signed, as `Stint-0.1.0.zip` and `Stint-0.1.0.dmg` in `target/dist/`. The build number is the branch's commit count. `just smoke-test 0.1.0` then launches the app from the disk image against a database from an older release, on every architecture the Mac can run, and checks that it opens and migrates.
+`just release 0.1.0` builds what ships: one universal app for Apple silicon and Intel Macs, ad-hoc signed, as `Stint-0.1.0.zip` and `Stint-0.1.0.dmg` in `target/dist/`. The build number is the branch's commit count. `just smoke-test 0.1.0` then launches the app from the disk image against a database from an older release and checks that it opens and migrates. Set `STINT_SMOKE_INTEL=1` to also run the Intel slice under Rosetta; macOS shows a notice about Intel apps afterwards.
 
 The macOS app lives in `macos/`, an Xcode project. Its Swift code calls the Rust core through `crates/stint-ffi`, whose static library and generated Swift bindings `just ffi` writes to `macos/Generated/`. Run `just ffi` once before building in Xcode.
 

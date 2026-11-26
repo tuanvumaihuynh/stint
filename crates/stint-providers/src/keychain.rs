@@ -11,6 +11,10 @@ const SECURITY: &str = "/usr/bin/security";
 const ITEM_NOT_FOUND: i32 = 44; // errSecItemNotFound
 const INTERACTION_NOT_ALLOWED: i32 = 36; // errSecInteractionNotAllowed: keychain locked
 
+/// The largest secret [`Item::set`] takes. `security -i` reads commands of up to about
+/// 4,096 characters, and the secret is sent hex-encoded, so twice its size.
+pub(crate) const MAX_SECRET: usize = 1_536;
+
 /// A generic password in a keychain.
 ///
 /// Every call shells out to `/usr/bin/security` on purpose. Items it creates trust that
@@ -54,7 +58,7 @@ impl Item<'_> {
         }
     }
 
-    /// Creates the item or replaces its secret.
+    /// Creates the item or replaces its secret, at most [`MAX_SECRET`] bytes.
     ///
     /// The secret goes to `security` on stdin, never on the command line where other
     /// processes could read it.
@@ -65,6 +69,12 @@ impl Item<'_> {
             return Err(ProviderError::Keychain(format!(
                 "unsupported item name {:?} / {:?}",
                 self.service, self.account
+            )));
+        }
+        if secret.len() > MAX_SECRET {
+            return Err(ProviderError::Keychain(format!(
+                "a {}-byte secret is over the {MAX_SECRET}-byte limit",
+                secret.len()
             )));
         }
         let mut line = format!(
@@ -99,7 +109,14 @@ impl Item<'_> {
         let output = child
             .wait_with_output()
             .map_err(|err| ProviderError::Keychain(err.to_string()))?;
-        interpret(&output)?;
+        // `security -i` echoes a command it cannot parse, secret included, so its output
+        // never reaches an error message.
+        if !output.status.success() {
+            return Err(ProviderError::Keychain(format!(
+                "security could not save {:?}",
+                self.service
+            )));
+        }
 
         // Interactive mode can exit 0 after a failed command, so read the secret back.
         if self.find()?.as_deref() != Some(secret.trim()) {

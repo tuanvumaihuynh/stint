@@ -1,9 +1,11 @@
 import ServiceManagement
 import SwiftUI
 
-/// The refresh interval, launching at login, and what Stint is tracking.
+/// The refresh interval, launching at login, updates, and what Stint is tracking.
 struct GeneralPane: View {
     let core: CoreClient
+    // `nil` in builds that do not update themselves.
+    @Environment(Updates.self) private var updates: Updates?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var error: String?
 
@@ -15,6 +17,12 @@ struct GeneralPane: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Stint \(Self.version)").font(.body.weight(.semibold))
                         Text(status).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let updates, updates.available != nil {
+                        Button("Update Available") { updates.checkForUpdates() }
+                            .controlSize(.small)
+                            .buttonBorderShape(.capsule)
                     }
                 }
                 .padding(.vertical, 4)
@@ -33,6 +41,10 @@ struct GeneralPane: View {
                     Text("Launch at login")
                     Text("Start Stint automatically when you sign in to macOS.")
                 }
+            }
+
+            if let updates {
+                UpdatesSection(updates: updates)
             }
         }
         .formStyle(.grouped)
@@ -86,5 +98,35 @@ struct GeneralPane: View {
 
     private static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+}
+
+/// Whether Stint checks for and installs new versions on its own, and checking now.
+private struct UpdatesSection: View {
+    let updates: Updates
+    // Closures, not method references: Xcode 26's compiler crashes on the thunk for a
+    // main-actor method passed as a Binding setter.
+
+    var body: some View {
+        Section("Updates") {
+            Toggle(isOn: Binding(get: { updates.automaticallyChecks }, set: { updates.setAutomaticallyChecks($0) })) {
+                Text("Check for updates automatically")
+                Text("Stint checks GitHub for a new version once a day.")
+            }
+            Toggle(isOn: Binding(get: { updates.automaticallyDownloads }, set: { updates.setAutomaticallyDownloads($0) })) {
+                Text("Download and install automatically")
+                Text("Install new versions the next time Stint quits.")
+            }
+            .disabled(!updates.automaticallyChecks)
+            LabeledContent {
+                Button("Check for Updates") { updates.checkForUpdates() }
+            } label: {
+                if let lastChecked = updates.lastChecked {
+                    Text("Last checked \(lastChecked, format: .relative(presentation: .named))")
+                } else {
+                    Text("Not checked yet")
+                }
+            }
+        }
     }
 }

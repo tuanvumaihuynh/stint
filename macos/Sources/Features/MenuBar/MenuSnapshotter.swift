@@ -17,6 +17,7 @@
         private let directory: URL
         private var current: Menu?
         private var controller: StatusMenuController?
+        private let updates = Updates.preview(available: nil, lastChecked: .now)
 
         /// The output directory when the app was started with `--snapshot <dir>`.
         static func requestedDirectory() -> URL? {
@@ -34,7 +35,7 @@
         func applicationDidFinishLaunching(_ notification: Notification) {
             controller = StatusMenuController(menu: { [weak self] in
                 self?.current ?? Menu(entries: [], offline: false)
-            }, perform: { _ in })
+            }, perform: { _ in }, updates: updates)
             Timer.scheduledTimer(withTimeInterval: Self.startupDelay, repeats: false) { _ in
                 MainActor.assumeIsolated {
                     do {
@@ -62,6 +63,14 @@
                     try photograph(to: file)
                     print("wrote \(file.path)")
                 }
+                // A scheduled check found a new version.
+                current = mockMenu(scenario: "default")
+                updates.preview(available: "0.2.0")
+                controller.update()
+                let file = directory.appendingPathComponent("menu-update-\(mode).png")
+                try photograph(to: file)
+                print("wrote \(file.path)")
+                updates.preview(available: nil)
             }
         }
 

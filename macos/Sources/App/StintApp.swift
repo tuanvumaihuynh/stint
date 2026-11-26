@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var core: CoreClient?
     private var statusMenu: StatusMenuController?
     private var window: SettingsWindowController?
+    private var updates: Updates?
+    private var termination: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchCheck = CommandLine.arguments.contains("--launch-check")
@@ -57,11 +59,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.reportLaunch(core.menu())
             exit(0)
         }
-        let statusMenu = StatusMenuController(menu: { core.menu() }, perform: { [weak self] in self?.perform($0) })
+        quitOnTerminationSignal()
+        let updates = Updates.start()
+        let statusMenu = StatusMenuController(
+            menu: { core.menu() }, perform: { [weak self] in self?.perform($0) }, updates: updates
+        )
         core.onChange = { statusMenu.update() }
+        updates?.onChange = { statusMenu.update() }
+        self.updates = updates
         statusMenu.update()
         self.core = core
         self.statusMenu = statusMenu
+    }
+
+    /// Quits as Quit Stint does when sent SIGTERM, as `kill` does, instead of dying on the
+    /// spot, so an update Sparkle downloaded still installs on the way out.
+    private func quitOnTerminationSignal() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApp.terminate(nil) }
+        source.resume()
+        termination = source
     }
 
     /// `--launch-check`, for release smoke tests: the database opened and migrated, so print
@@ -89,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func settingsWindow() -> SettingsWindowController? {
         if window == nil, let core {
-            window = SettingsWindowController(core: core)
+            window = SettingsWindowController(core: core, updates: updates)
         }
         return window
     }

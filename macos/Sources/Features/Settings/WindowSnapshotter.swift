@@ -38,6 +38,9 @@
             }
         }
 
+        // Release builds show the Updates section; snapshots show it with made-up state.
+        private let updates = Updates.preview(available: nil, lastChecked: Date(timeIntervalSinceNow: -2 * 3600))
+
         private struct Shot {
             let name: String
             let scenario: String
@@ -53,6 +56,9 @@
             }
             return [
                 Shot(name: "general", scenario: "default", pane: .general),
+                Shot(name: "general-update", scenario: "default", pane: .general) { _, _ in
+                    self.updates.preview(available: "0.2.0")
+                },
                 Shot(name: "accounts", scenario: "default", pane: .accounts),
                 Shot(name: "accounts-empty", scenario: "empty", pane: .accounts),
                 Shot(name: "accounts-remove", scenario: "default", pane: .accounts) { window, core in
@@ -119,6 +125,7 @@
                     print("wrote \(file.path)")
                     window.model.signIn = nil
                     window.model.removing = nil
+                    updates.preview(available: nil)
                     window.window?.orderOut(nil)
                     try await Task.sleep(for: Self.settleDelay)
                 }
@@ -147,7 +154,7 @@
                 return (window, core)
             }
             let core = try CoreClient(mock: scenario)
-            let window = SettingsWindowController(core: core)
+            let window = SettingsWindowController(core: core, updates: updates)
             cores.append(core)
             windows[scenario] = window
             return (window, core)

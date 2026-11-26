@@ -19,13 +19,16 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let statusMenu = NSMenu()
     private let source: () -> Menu
     private let perform: (Command) -> Void
+    // `nil` in builds that do not update themselves.
+    private let updates: Updates?
     // The command of each command item, by its tag.
     private var commands: [Command] = []
 
     /// `menu` is read every time the menu opens; `perform` runs a chosen command.
-    init(menu: @escaping () -> Menu, perform: @escaping (Command) -> Void) {
+    init(menu: @escaping () -> Menu, perform: @escaping (Command) -> Void, updates: Updates? = nil) {
         source = menu
         self.perform = perform
+        self.updates = updates
         super.init()
         if let icon = NSImage(named: "StatusIcon") {
             icon.size = NSSize(width: Self.statusIconSize, height: Self.statusIconSize)
@@ -57,6 +60,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         commands.removeAll()
         for entry in menu.entries {
             statusMenu.addItem(item(for: entry))
+            if updates != nil, case .command(.settings, _, _) = entry {
+                statusMenu.addItem(updateItem(title: "Check for Updates…", image: nil))
+            }
+            // An update a scheduled check found sits right under the header.
+            if let version = updates?.available, case .header = entry {
+                statusMenu.addItem(.separator())
+                statusMenu.addItem(updateItem(
+                    title: "Update Available: Stint \(version)…",
+                    image: NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+                ))
+            }
         }
     }
 
@@ -95,6 +109,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             item.isEnabled = enabled
             return item
         }
+    }
+
+    private func updateItem(title: String, image: NSImage?) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(checkForUpdates), keyEquivalent: "")
+        item.target = self
+        item.image = image
+        return item
+    }
+
+    @objc private func checkForUpdates() {
+        updates?.checkForUpdates()
     }
 
     @objc private func runCommand(_ sender: NSMenuItem) {

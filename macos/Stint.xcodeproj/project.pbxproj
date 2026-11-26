@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5A1000000000000000001101 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A1000000000000000001202 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		5A1000000000000000000101 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -49,6 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A1000000000000000001101 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,6 +108,9 @@
 				5A1000000000000000000403 /* Generated/Swift */,
 			);
 			name = Stint;
+			packageProductDependencies = (
+				5A1000000000000000001202 /* Sparkle */,
+			);
 			productName = Stint;
 			productReference = 5A1000000000000000000301 /* Stint.app */;
 			productType = "com.apple.product-type.application";
@@ -156,6 +164,9 @@
 			);
 			mainGroup = 5A1000000000000000000601;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5A1000000000000000001201 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5A1000000000000000000602 /* Products */;
 			projectDirPath = "";
@@ -263,6 +274,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Stint;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -275,6 +287,8 @@
 				OTHER_LDFLAGS = "-lstint_ffi";
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.tuanvumaihuynh.stint;
 				PRODUCT_NAME = Stint;
+				SPARKLE_FEED_URL = "https://github.com/tuanvumaihuynh/stint/releases/latest/download/appcast.xml";
+				SPARKLE_PUBLIC_KEY = "";
 			};
 			name = Debug;
 		};
@@ -288,6 +302,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Stint;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -300,6 +315,8 @@
 				OTHER_LDFLAGS = "-lstint_ffi";
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.tuanvumaihuynh.stint;
 				PRODUCT_NAME = Stint;
+				SPARKLE_FEED_URL = "https://github.com/tuanvumaihuynh/stint/releases/latest/download/appcast.xml";
+				SPARKLE_PUBLIC_KEY = "";
 			};
 			name = Release;
 		};
@@ -360,6 +377,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5A1000000000000000001201 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5A1000000000000000001202 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A1000000000000000001201 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5A1000000000000000000001 /* Project object */;
 }

@@ -10,9 +10,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     let model = SettingsModel()
     private let core: CoreClient
 
-    init(core: CoreClient) {
+    init(core: CoreClient, updates: Updates? = nil) {
         self.core = core
-        let hosting = NSHostingController(rootView: SettingsView(core: core, model: model))
+        let hosting = NSHostingController(
+            rootView: SettingsView(core: core, model: model).environment(updates)
+        )
         hosting.sceneBridgingOptions = [.toolbars, .title]
         let window = NSWindow(contentViewController: hosting)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]

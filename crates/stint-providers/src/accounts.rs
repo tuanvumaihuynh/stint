@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use jiff::Timestamp;
 use stint_core::QuotaWindow;
 
+use crate::antigravity;
 use crate::claude;
 use crate::codex;
 use crate::credential::{Credential, Vault};
@@ -66,6 +67,9 @@ impl Accounts {
             Credential::Codex(login) => {
                 Credential::Codex(codex::refresh(&self.client, login, now).await?)
             }
+            Credential::Antigravity(login) => {
+                Credential::Antigravity(antigravity::refresh(&self.client, login, now).await?)
+            }
         };
         let mut saved = self.vault.save(key, &renewed);
         for _ in 1..SAVE_ATTEMPTS {
@@ -91,6 +95,7 @@ fn renewal_due(credential: &Credential, now: Timestamp) -> bool {
     match credential {
         Credential::Claude(login) => claude::renewal_due(login, now),
         Credential::Codex(login) => codex::renewal_due(login, now),
+        Credential::Antigravity(login) => antigravity::renewal_due(login, now),
     }
 }
 
@@ -101,6 +106,7 @@ async fn usage(
     match credential {
         Credential::Claude(login) => claude::usage(client, login).await,
         Credential::Codex(login) => codex::usage(client, login).await,
+        Credential::Antigravity(login) => antigravity::usage(client, login).await,
     }
 }
 

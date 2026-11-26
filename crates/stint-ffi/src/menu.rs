@@ -84,8 +84,11 @@ impl Command {
     }
 }
 
-pub(crate) const PROVIDERS: [ProviderId; 3] =
-    [ProviderId::Claude, ProviderId::Codex, ProviderId::Gemini];
+pub(crate) const PROVIDERS: [ProviderId; 3] = [
+    ProviderId::Claude,
+    ProviderId::Codex,
+    ProviderId::Antigravity,
+];
 
 /// The menu rows for `data` as of `now`.
 pub(crate) fn entries(data: &MenuData, now: Timestamp) -> Vec<Entry> {
@@ -271,7 +274,7 @@ pub(crate) fn provider_name(provider: ProviderId) -> &'static str {
     match provider {
         ProviderId::Claude => "Claude",
         ProviderId::Codex => "Codex",
-        ProviderId::Gemini => "Gemini",
+        ProviderId::Antigravity => "Antigravity",
     }
 }
 
@@ -439,7 +442,7 @@ mod tests {
     fn busy_menu_groups_three_providers() {
         let rows = entries(&data("busy"), now());
         assert_eq!(header_of(&rows).0, "10 accounts · 2 need attention");
-        assert!(rows.contains(&section("Gemini")));
+        assert!(rows.contains(&section("Antigravity")));
         assert_eq!(accounts(&rows).last().unwrap().1, "Not signed in");
     }
 }

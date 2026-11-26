@@ -96,9 +96,9 @@ impl Stint {
         let accounts = store.accounts().map_err(|err| store_failure(&err))?;
         match target {
             Target::New { provider, name } => {
-                if *provider == ProviderId::Gemini {
+                if *provider == ProviderId::Antigravity {
                     return Err(StintError::Message(
-                        "Gemini accounts are coming later.".to_owned(),
+                        "Antigravity accounts are coming later.".to_owned(),
                     ));
                 }
                 if accounts
@@ -209,7 +209,7 @@ fn failure(err: &ProviderError, provider: ProviderId) -> String {
     let cli = match provider {
         ProviderId::Claude => "Claude Code",
         ProviderId::Codex => "The Codex CLI",
-        ProviderId::Gemini => "The Gemini CLI",
+        ProviderId::Antigravity => "Antigravity",
     };
     match err {
         ProviderError::CliMissing(_) => {

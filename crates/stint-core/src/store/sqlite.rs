@@ -17,10 +17,11 @@ use crate::error::StoreError;
 use crate::quota::QuotaSnapshot;
 
 // Append only. Each entry is one schema version tracked in `user_version`.
-static MIGRATION_LIST: [M<'static>; 3] = [
+static MIGRATION_LIST: [M<'static>; 4] = [
     M::up(include_str!("sqlite/migrations/0001_init.sql")),
     M::up(include_str!("sqlite/migrations/0002_tracked_accounts.sql")),
     M::up(include_str!("sqlite/migrations/0003_window_settings.sql")),
+    M::up(include_str!("sqlite/migrations/0004_antigravity.sql")),
 ];
 static MIGRATIONS: Migrations<'static> = Migrations::from_slice(&MIGRATION_LIST);
 const SCHEMA_VERSION: usize = MIGRATION_LIST.len();
@@ -243,8 +244,25 @@ mod tests {
             MIGRATIONS
                 .pending_migrations(&Connection::open_in_memory().unwrap())
                 .unwrap(),
-            3
+            i32::try_from(SCHEMA_VERSION).unwrap()
         );
+    }
+
+    #[test]
+    fn gemini_accounts_become_antigravity_accounts() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        MIGRATIONS.to_version(&mut conn, 3).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (provider, label, credential_key, created_at) \
+             VALUES ('gemini', 'Personal', 'key', 0)",
+            [],
+        )
+        .unwrap();
+        MIGRATIONS.to_latest(&mut conn).unwrap();
+        let provider: String = conn
+            .query_row("SELECT provider FROM accounts", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(provider, "antigravity");
     }
 
     #[test]

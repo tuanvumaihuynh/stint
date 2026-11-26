@@ -59,8 +59,8 @@ pub struct SignIn {
 impl SignIn {
     /// Prepares a fresh attempt under `<data_dir>/signin/`.
     pub fn start(provider: ProviderId, data_dir: &Path) -> Result<Self, ProviderError> {
-        if provider == ProviderId::Gemini {
-            return Err(ProviderError::Unsupported("Gemini accounts".into()));
+        if provider == ProviderId::Antigravity {
+            return Err(ProviderError::Unsupported("Antigravity accounts".into()));
         }
         let root = data_dir.join(SIGNIN_DIR).join(random_name());
         let home = root.join("home");
@@ -109,7 +109,7 @@ impl SignIn {
                 }
                 command
             }
-            ProviderId::Gemini => unreachable!("rejected by start"),
+            ProviderId::Antigravity => unreachable!("rejected by start"),
         };
         command.current_dir(self.root.join("work"));
         Ok(command)
@@ -121,7 +121,7 @@ impl SignIn {
         match self.provider {
             ProviderId::Claude => claude::import(home, &self.claude_slot()),
             ProviderId::Codex => codex::import(home),
-            ProviderId::Gemini => unreachable!("rejected by start"),
+            ProviderId::Antigravity => unreachable!("rejected by start"),
         }
     }
 
@@ -228,10 +228,10 @@ mod tests {
     }
 
     #[test]
-    fn gemini_is_unsupported() {
+    fn antigravity_is_unsupported() {
         let data = tempfile::TempDir::new().unwrap();
         assert!(matches!(
-            SignIn::start(ProviderId::Gemini, data.path()),
+            SignIn::start(ProviderId::Antigravity, data.path()),
             Err(ProviderError::Unsupported(_))
         ));
     }

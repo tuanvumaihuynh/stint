@@ -17,6 +17,7 @@ const VERSION: u32 = 1;
 pub enum Credential {
     Claude(ClaudeLogin),
     Codex(CodexLogin),
+    Antigravity(AntigravityLogin),
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,6 +42,17 @@ pub struct CodexLogin {
     pub(crate) last_refresh_ms: Option<i64>,
 }
 
+/// A Google login Stint signed in itself for Antigravity.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AntigravityLogin {
+    pub(crate) access_token: String,
+    pub(crate) refresh_token: String,
+    /// When the access token expires, in Unix milliseconds.
+    pub(crate) expires_at_ms: Option<i64>,
+    /// The Google account's stable id, which stays the same when its email changes.
+    pub(crate) subject: Option<String>,
+}
+
 // Tokens never reach logs.
 impl fmt::Debug for Credential {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -54,6 +66,10 @@ impl fmt::Debug for Credential {
                 .debug_struct("Codex")
                 .field("account_id", &login.account_id)
                 .field("last_refresh_ms", &login.last_refresh_ms)
+                .finish_non_exhaustive(),
+            Self::Antigravity(login) => f
+                .debug_struct("Antigravity")
+                .field("expires_at_ms", &login.expires_at_ms)
                 .finish_non_exhaustive(),
         }
     }

@@ -1,7 +1,8 @@
-//! Signs accounts in through the providers' own CLIs, keeps their logins in the Keychain,
+//! Signs accounts in, through the providers' own CLIs or in the browser, keeps their logins in the Keychain,
 //! and reads their live subscription quota.
 
 mod accounts;
+pub mod antigravity;
 mod claude;
 mod codex;
 mod credential;
@@ -12,7 +13,7 @@ mod plan;
 mod signin;
 
 pub use accounts::Accounts;
-pub use credential::{ClaudeLogin, CodexLogin, Credential, Vault};
+pub use credential::{AntigravityLogin, ClaudeLogin, CodexLogin, Credential, Vault};
 pub use error::ProviderError;
 pub use http::client as http_client;
 pub use signin::{Enrolled, SignIn, SignInEvent, Watched, new_credential_key};

@@ -52,7 +52,7 @@ extension Provider {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
-        case .gemini: "Gemini"
+        case .antigravity: "Antigravity"
         }
     }
 
@@ -61,7 +61,7 @@ extension Provider {
         switch self {
         case .claude: "Anthropic subscription (Pro, Max, Team)"
         case .codex: "ChatGPT subscription (Plus, Pro, Team)"
-        case .gemini: "Google AI subscription"
+        case .antigravity: "Google AI subscription (Pro, Ultra)"
         }
     }
 
@@ -70,16 +70,16 @@ extension Provider {
         switch self {
         case .claude: "ProviderClaude"
         case .codex: "ProviderCodex"
-        case .gemini: "ProviderGemini"
+        case .antigravity: "ProviderAntigravity"
         }
     }
 
     /// Whether Stint can add accounts of this provider yet.
     var available: Bool {
-        self != .gemini
+        self != .antigravity
     }
 
-    static let all: [Provider] = [.claude, .codex, .gemini]
+    static let all: [Provider] = [.claude, .codex, .antigravity]
 }
 
 /// A provider's own mark on a rounded tile, as its app icon shows it.
@@ -97,7 +97,7 @@ struct ProviderLogo: View {
             case .codex:
                 shape.fill(Color(hex: 0x0D0D0D))
                 mark.foregroundStyle(.white)
-            case .gemini:
+            case .antigravity:
                 shape.fill(.white)
                 shape.strokeBorder(.black.opacity(0.1), lineWidth: 0.5)
                 mark.foregroundStyle(

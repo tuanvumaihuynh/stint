@@ -12,7 +12,7 @@ use crate::quota::{AccountQuota, FetchError};
 pub enum Provider {
     Claude,
     Codex,
-    Gemini,
+    Antigravity,
 }
 
 impl From<ProviderId> for Provider {
@@ -20,7 +20,7 @@ impl From<ProviderId> for Provider {
         match provider {
             ProviderId::Claude => Self::Claude,
             ProviderId::Codex => Self::Codex,
-            ProviderId::Gemini => Self::Gemini,
+            ProviderId::Antigravity => Self::Antigravity,
         }
     }
 }
@@ -30,7 +30,7 @@ impl From<Provider> for ProviderId {
         match provider {
             Provider::Claude => Self::Claude,
             Provider::Codex => Self::Codex,
-            Provider::Gemini => Self::Gemini,
+            Provider::Antigravity => Self::Antigravity,
         }
     }
 }

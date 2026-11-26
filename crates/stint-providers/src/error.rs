@@ -31,6 +31,12 @@ pub enum ProviderError {
     SignInFailed { code: Option<i32> },
     #[error("sign-in is unsupported: {0}")]
     Unsupported(String),
+    #[error("the account is not set up for this: {0}")]
+    AccountSetup(String),
+    #[error("port {0} is in use by another app's sign-in; close it and try again")]
+    CallbackPortBusy(u16),
+    #[error("the sign-in was refused: {0}")]
+    SignInRefused(&'static str),
     #[error("usage answer is for another account than the signed-in one")]
     AccountMismatch,
     #[error("provider answered HTTP {status}")]

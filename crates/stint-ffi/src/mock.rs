@@ -144,7 +144,7 @@ fn busy(now: Timestamp) -> Vec<AccountQuota> {
         ),
     );
     accounts.push(account(
-        ProviderId::Gemini,
+        ProviderId::Antigravity,
         "Personal",
         "AI Pro",
         vec![window(now, WindowKind::Daily, 14.0, 230)],
@@ -152,7 +152,7 @@ fn busy(now: Timestamp) -> Vec<AccountQuota> {
         None,
     ));
     accounts.push(account(
-        ProviderId::Gemini,
+        ProviderId::Antigravity,
         "Studio",
         "Ultra",
         Vec::new(),

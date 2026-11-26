@@ -59,6 +59,8 @@ On macOS, `just app-test` runs the app's unit tests, and `just app-snapshot` pho
 
 `just release 0.1.0` builds what ships: one universal app for Apple silicon and Intel Macs, ad-hoc signed, as `Stint-0.1.0.zip` and `Stint-0.1.0.dmg` in `target/dist/`. The build number is the branch's commit count. `just smoke-test 0.1.0` then launches the app from the disk image against a database from an older release and checks that it opens and migrates. Set `STINT_SMOKE_INTEL=1` to also run the Intel slice under Rosetta; macOS shows a notice about Intel apps afterwards.
 
+Release builds update themselves with [Sparkle](https://sparkle-project.org). They read the appcast attached to the latest GitHub release, and install only archives signed with the EdDSA private key whose public half is in `macos/sparkle-public-key.txt`. Debug builds never update.
+
 The macOS app lives in `macos/`, an Xcode project. Its Swift code calls the Rust core through `crates/stint-ffi`, whose static library and generated Swift bindings `just ffi` writes to `macos/Generated/`. Run `just ffi` once before building in Xcode.
 
 Workspace crates live under `crates/`:

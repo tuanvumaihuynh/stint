@@ -34,7 +34,7 @@ dist="$root/target/dist"
 derived="$root/macos/build/release"
 app="$derived/Build/Products/Release/Stint.app"
 
-public_key=${SPARKLE_PUBLIC_KEY:-$(cat macos/sparkle-public-key.txt 2>/dev/null || true)}
+public_key=${SPARKLE_PUBLIC_KEY:-$(tr -d "[:space:]" <macos/sparkle-public-key.txt 2>/dev/null || true)}
 if [ -z "$public_key" ]; then
     echo "no Sparkle public key: add it to macos/sparkle-public-key.txt" >&2
     exit 1

@@ -5,6 +5,8 @@
 //! the attempt removes the directory and any Keychain item the CLI made for it. The CLI
 //! is never told to log out: that would revoke the login Stint just copied.
 
+mod watch;
+
 use std::fs;
 use std::hash::{BuildHasher, RandomState};
 use std::os::unix::fs::DirBuilderExt;
@@ -18,6 +20,8 @@ use crate::codex;
 use crate::credential::Credential;
 use crate::error::ProviderError;
 use crate::keychain::Item;
+
+pub use watch::{SignInEvent, Watched};
 
 const SIGNIN_DIR: &str = "signin";
 // Variables that would point the CLI at another login or credential store.

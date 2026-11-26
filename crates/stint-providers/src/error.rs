@@ -25,6 +25,10 @@ pub enum ProviderError {
     },
     #[error("{0} is not installed or not on PATH")]
     CliMissing(&'static str),
+    #[error("the sign-in was cancelled")]
+    SignInCancelled,
+    #[error("the sign-in did not finish ({})", exit_status(*.code))]
+    SignInFailed { code: Option<i32> },
     #[error("sign-in is unsupported: {0}")]
     Unsupported(String),
     #[error("usage answer is for another account than the signed-in one")]
@@ -42,4 +46,11 @@ impl ProviderError {
         let path = path.into();
         move |source| Self::Io { path, source }
     }
+}
+
+fn exit_status(code: Option<i32>) -> String {
+    code.map_or_else(
+        || "stopped by a signal".to_owned(),
+        |code| format!("exit code {code}"),
+    )
 }

@@ -50,9 +50,9 @@ fi
 macos/scripts/build-ffi.sh universal
 
 rm -rf "$derived"
-# Ad-hoc builds leave the hardened runtime off: its library validation refuses to load
-# the embedded Sparkle framework, since ad-hoc code has no Team ID. The runtime is only
-# required for notarization, which an ad-hoc build cannot have.
+# The hardened runtime stays off, as in the project: its library validation refuses to
+# load the embedded Sparkle framework, since ad-hoc code has no Team ID. The runtime is
+# only required for notarization, which an ad-hoc build cannot have.
 xcodebuild -quiet \
     -project macos/Stint.xcodeproj \
     -scheme Stint \

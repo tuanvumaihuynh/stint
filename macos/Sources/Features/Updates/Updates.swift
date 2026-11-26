@@ -104,11 +104,12 @@ extension Updates: SPUUpdaterDelegate {
 extension Updates: SPUStandardUserDriverDelegate {
     nonisolated var supportsGentleScheduledUpdateReminders: Bool { true }
 
-    /// Sparkle shows a scheduled update itself only when Stint is already in front.
+    /// A scheduled update is never shown in Sparkle's window: Sparkle may report immediate
+    /// focus right after launch, while Stint is in the background. The menu offers it.
     nonisolated func standardUserDriverShouldHandleShowingScheduledUpdate(
         _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool
     ) -> Bool {
-        immediateFocus
+        false
     }
 
     nonisolated func standardUserDriverWillHandleShowingUpdate(
@@ -116,7 +117,9 @@ extension Updates: SPUStandardUserDriverDelegate {
     ) {
         let version = update.displayVersionString
         MainActor.assumeIsolated {
-            // Shown by Sparkle or not, the menu keeps offering it until the session ends.
+            // Sparkle records a check when it starts, so a check still open has a new time.
+            readSettings()
+            // A check the user started shows Sparkle's window; a scheduled one, the menu.
             setAvailable(state.userInitiated ? nil : version)
         }
     }

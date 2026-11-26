@@ -21,10 +21,10 @@ test:
 ffi profile="debug":
     macos/scripts/build-ffi.sh {{profile}}
 
-# Build the macOS app with Xcode; pass `Release` for an optimized build (macOS only)
+# Build the macOS app with Xcode for this Mac; pass `Release` for an optimized build (macOS only)
 app-build config="Debug":
     just ffi {{ if config == "Release" { "release" } else { "debug" } }}
-    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration {{config}} -destination "platform=macOS,arch=$(uname -m)" -derivedDataPath macos/build build
+    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration {{config}} -destination "platform=macOS,arch=$(uname -m)" -derivedDataPath macos/build ONLY_ACTIVE_ARCH=YES build
 
 # Run the macOS app's unit tests (macOS only)
 app-test:

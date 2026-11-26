@@ -10,6 +10,7 @@ publish = false
 
 [workspace.dependencies]
 stint-core = { path = "crates/stint-core" }
+stint-providers = { path = "crates/stint-providers" }
 
 anyhow = "1.0.105"
 async-channel = "2.5.0"

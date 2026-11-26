@@ -174,9 +174,9 @@ mod tests {
     #[test]
     fn slot_hashes_the_unresolved_directory() {
         // SHA-256("/tmp/stint/home") starts with ea86a8bb.
-        let slot = Slot::for_dir("/tmp/stint/home", "vux");
+        let slot = Slot::for_dir("/tmp/stint/home", "me");
         assert_eq!(slot.service, "Claude Code-credentials-ea86a8bb");
-        assert_eq!(slot.account, "vux");
+        assert_eq!(slot.account, "me");
         assert_eq!(
             slot.overflow_services(),
             [
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn keychain_user_falls_back_for_unusual_names() {
-        assert_eq!(keychain_user(Some("vux.mai-1")), "vux.mai-1");
+        assert_eq!(keychain_user(Some("me.work-1")), "me.work-1");
         for user in [None, Some(""), Some("vu x"), Some("vũ")] {
             assert_eq!(keychain_user(user), FALLBACK_USER);
         }

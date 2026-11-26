@@ -43,8 +43,8 @@ struct AccountsPane: View {
                 Button("Refresh", systemImage: "arrow.clockwise", action: core.refresh)
                     .disabled(overview.accounts.isEmpty || overview.refreshing)
                     .help("Refresh every account now")
-                Button("Add Account…", action: addAccount)
-                    .buttonStyle(.borderedProminent)
+                Button("Add Account", systemImage: "plus", action: addAccount)
+                    .help("Add an account")
             }
         }
         .sheet(item: $renaming) { account in

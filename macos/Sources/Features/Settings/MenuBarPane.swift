@@ -7,14 +7,8 @@ struct MenuBarPane: View {
 
     var body: some View {
         let accounts = core.overview.accounts
+        let firstProvider = Provider.all.first { provider in accounts.contains { $0.provider == provider } }
         Form {
-            Section {} header: {
-                Text("Choose which accounts appear in the menu bar menu. Hidden accounts continue updating in this window.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .textCase(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             if accounts.isEmpty {
                 Section {
                     Text("Accounts you add appear here.").foregroundStyle(.secondary)
@@ -23,7 +17,7 @@ struct MenuBarPane: View {
             ForEach(Provider.all, id: \.self) { provider in
                 let rows = accounts.filter { $0.provider == provider }
                 if !rows.isEmpty {
-                    Section(provider.title) {
+                    Section {
                         ForEach(rows, id: \.id) { account in
                             MenuBarRow(account: account) { shown in
                                 do {
@@ -33,6 +27,18 @@ struct MenuBarPane: View {
                                 }
                             }
                         }
+                    } header: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if provider == firstProvider {
+                                Text("Choose which accounts appear in the menu bar menu. Hidden accounts continue updating in this window.")
+                                    .font(.body)
+                                    .fontWeight(.regular)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Text(provider.title)
+                        }
+                        .textCase(nil)
                     }
                 }
             }

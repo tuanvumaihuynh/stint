@@ -55,25 +55,27 @@ private struct Sidebar: View {
     let query: String
 
     var body: some View {
-        List {
-            AppHeader(summary: core.overview.accounts.isEmpty ? "No accounts yet" : core.overview.summary)
-                .padding(.horizontal, SidebarRow.inset)
-                .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 10, trailing: 0))
-                .listRowSeparator(.hidden)
-            ForEach(Pane.allCases.filter { $0.matches(query) }) { pane in
-                SidebarRow(
-                    pane: pane,
-                    selected: model.pane == pane,
-                    badge: pane == .accounts && !core.overview.accounts.isEmpty
-                        ? "\(core.overview.accounts.count)" : nil
-                ) {
-                    model.show(pane)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                AppHeader(summary: core.overview.accounts.isEmpty ? "No accounts yet" : core.overview.summary)
+                    .padding(.horizontal, SidebarRow.inset)
+                    .padding(.top, 6)
+                    .padding(.bottom, 16)
+                ForEach(Pane.allCases.filter { $0.matches(query) }) { pane in
+                    SidebarRow(
+                        pane: pane,
+                        selected: model.pane == pane,
+                        badge: pane == .accounts && !core.overview.accounts.isEmpty
+                            ? "\(core.overview.accounts.count)" : nil
+                    ) {
+                        model.show(pane)
+                    }
                 }
-                .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 0))
             }
+            // Lines the rows up with the search field above them.
+            .padding(.horizontal, 10)
         }
-        .listStyle(.sidebar)
-        .scrollDisabled(true)
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 
@@ -84,9 +86,9 @@ private struct AppHeader: View {
         HStack(spacing: 8) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
-                .frame(width: 28, height: 28)
+                .frame(width: 34, height: 34)
                 // App icons carry transparent margins; this lines the artwork up with the tiles.
-                .padding(.leading, -2)
+                .padding(.horizontal, -3)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Stint").font(.body.weight(.semibold))
                 Text(summary)
@@ -113,7 +115,7 @@ private struct SidebarRow: View {
             HStack(spacing: 8) {
                 IconTile(symbol: pane.symbol, colors: pane.tile)
                 Text(pane.title)
-                    .font(.system(size: 13, weight: selected ? .medium : .regular))
+                    .font(.body.weight(selected ? .semibold : .regular))
                     .foregroundStyle(.primary)
                 Spacer()
                 if let badge {
@@ -121,11 +123,11 @@ private struct SidebarRow: View {
                 }
             }
             .padding(.horizontal, Self.inset)
-            .frame(height: 30)
+            .frame(height: 32)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.primary.opacity(0.08))
+                        .fill(.primary.opacity(0.09))
                 }
             }
             .contentShape(Rectangle())

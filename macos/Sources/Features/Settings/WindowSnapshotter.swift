@@ -83,17 +83,16 @@
                 for shot in shots {
                     let (window, core) = try controller(for: shot.scenario)
                     window.show(shot.pane)
-                    if let shown = window.window, let screen = NSScreen.screens.first {
-                        // The screen with the menu bar, where the window is surely visible.
+                    if let shown = window.window {
                         shown.setContentSize(SettingsWindowController.size)
-                        let visible = screen.visibleFrame
-                        shown.setFrameOrigin(NSPoint(
-                            x: visible.midX - shown.frame.width / 2,
-                            y: visible.midY - shown.frame.height / 2
-                        ))
+                        try await place(shown)
                     }
                     shot.prepare(window, core)
                     try await Task.sleep(for: Self.settleDelay)
+                    for _ in 0..<3 where window.window?.occlusionState.contains(.visible) == false {
+                        if let shown = window.window { try await place(shown) }
+                        try await Task.sleep(for: Self.settleDelay)
+                    }
                     let file = directory.appendingPathComponent("window-\(shot.name)-\(mode).png")
                     try capture(window, to: file)
                     print("wrote \(file.path)")
@@ -101,6 +100,23 @@
                     window.model.removing = nil
                     window.window?.orderOut(nil)
                     try await Task.sleep(for: Self.settleDelay)
+                }
+            }
+        }
+
+        /// Centers the window on the first screen where nothing covers it, such as a
+        /// full-screen app.
+        private func place(_ window: NSWindow) async throws {
+            for screen in NSScreen.screens {
+                let visible = screen.visibleFrame
+                window.setFrameOrigin(NSPoint(
+                    x: visible.midX - window.frame.width / 2,
+                    y: visible.midY - window.frame.height / 2
+                ))
+                window.orderFrontRegardless()
+                try await Task.sleep(for: .milliseconds(300))
+                if window.occlusionState.contains(.visible) {
+                    return
                 }
             }
         }

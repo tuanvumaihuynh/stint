@@ -105,48 +105,72 @@ private struct ProviderStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose a subscription provider to connect to Stint.")
-                .font(.body)
                 .foregroundStyle(.secondary)
-            Picker("Provider", selection: $flow.provider) {
-                ForEach(Provider.all, id: \.self) { provider in
-                    ProviderChoice(provider: provider)
-                        .tag(provider)
-                        .selectionDisabled(!provider.available)
+            VStack(spacing: 0) {
+                ForEach(Array(Provider.all.enumerated()), id: \.element) { index, provider in
+                    if index > 0 {
+                        Divider().padding(.leading, 50)
+                    }
+                    ProviderChoice(provider: provider, selected: flow.provider == provider) {
+                        flow.provider = provider
+                    }
                 }
             }
-            .pickerStyle(.radioGroup)
-            .labelsHidden()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .groupBox()
         }
     }
 }
 
+/// One provider: its logo, name, and plans, with a radio button centered on the row.
 private struct ProviderChoice: View {
     let provider: Provider
+    let selected: Bool
+    let choose: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            ProviderLogo(provider: provider, size: 28)
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(provider.title).font(.body.weight(.medium))
-                    if !provider.available {
-                        Text("Coming later")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+        Button(action: choose) {
+            HStack(spacing: 10) {
+                ProviderLogo(provider: provider, size: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(provider.title).fontWeight(.medium)
+                    Text(provider.subscription)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-                Text(provider.subscription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if provider.available {
+                    RadioMark(selected: selected)
+                } else {
+                    Text("Coming later")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!provider.available)
+        .opacity(provider.available ? 1 : 0.45)
+    }
+}
+
+/// The look of a macOS radio button, for rows that are clicked as a whole.
+private struct RadioMark: View {
+    let selected: Bool
+
+    var body: some View {
+        ZStack {
+            if selected {
+                Circle().fill(.tint)
+                Circle().fill(.white).frame(width: 6, height: 6)
+            } else {
+                Circle().fill(.background)
+                Circle().strokeBorder(.tertiary, lineWidth: 1)
             }
         }
-        .padding(.vertical, 5)
-        .padding(.leading, 4)
-        .opacity(provider.available ? 1 : 0.5)
+        .frame(width: 16, height: 16)
     }
 }
 

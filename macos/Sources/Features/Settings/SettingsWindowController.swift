@@ -33,11 +33,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     /// Brings the window forward on `pane`.
     func show(_ pane: Pane) {
         model.show(pane)
+        let opening = window?.isVisible == false
         // A menu bar app shows in the Dock and the app switcher only while its window is open.
         NSApp.setActivationPolicy(.regular)
         showWindow(nil)
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
+        if opening {
+            // The search field would otherwise take focus and show its ring on every open.
+            DispatchQueue.main.async { [weak self] in self?.window?.makeFirstResponder(nil) }
+        }
     }
 
     /// Opens the Accounts pane with the Add Account sheet, unless a sign-in is running.

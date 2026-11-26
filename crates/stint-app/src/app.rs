@@ -38,6 +38,8 @@ pub(crate) fn run() -> anyhow::Result<()> {
 fn source() -> anyhow::Result<Source> {
     if cfg!(debug_assertions)
         && let Ok(scenario) = std::env::var(MOCK_ENV)
+        // `just app` sets it empty when no scenario is given.
+        && !scenario.is_empty()
     {
         anyhow::ensure!(
             mock::SCENARIOS.contains(&scenario.as_str()),

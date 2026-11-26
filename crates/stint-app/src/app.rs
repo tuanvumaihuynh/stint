@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Context as _;
 use gpui_kit::{ActivationPolicy, App, AppContext, Entity, Global, QuitMode};
 use stint_core::SqliteStore;
@@ -9,6 +11,8 @@ use crate::status_menu::StatusMenu;
 
 // Picks mock accounts in debug builds: `STINT_MOCK=default just app`.
 const MOCK_ENV: &str = "STINT_MOCK";
+// How often real accounts refresh on their own.
+const POLL_INTERVAL: Duration = Duration::from_mins(5);
 
 struct AppState {
     quota: Entity<QuotaState>,
@@ -34,6 +38,8 @@ pub(crate) fn run() -> anyhow::Result<()> {
 fn source() -> anyhow::Result<Source> {
     if cfg!(debug_assertions)
         && let Ok(scenario) = std::env::var(MOCK_ENV)
+        // `just app` sets it empty when no scenario is given.
+        && !scenario.is_empty()
     {
         anyhow::ensure!(
             mock::SCENARIOS.contains(&scenario.as_str()),
@@ -42,10 +48,11 @@ fn source() -> anyhow::Result<Source> {
         );
         return Ok(Source::Mock(scenario));
     }
+    let data_dir = stint_core::data_dir().context("find the home directory")?;
     let path = stint_core::database_path().context("find the home directory")?;
     let store =
         SqliteStore::open(&path).with_context(|| format!("open database {}", path.display()))?;
-    Ok(Source::Store(store))
+    Ok(Source::Store { store, data_dir })
 }
 
 fn start(cx: &mut App, source: Source) -> anyhow::Result<()> {
@@ -53,10 +60,24 @@ fn start(cx: &mut App, source: Source) -> anyhow::Result<()> {
     // A menu bar utility: no Dock icon and no app menu.
     cx.set_activation_policy(ActivationPolicy::Accessory);
 
-    let refreshing = matches!(&source, Source::Mock(name) if mock::refreshing(name));
+    // Real accounts refresh at once; a mock refreshes only to show its refreshing state.
+    let refresh_now = match &source {
+        Source::Store { .. } => true,
+        Source::Mock(name) => mock::refreshing(name),
+    };
     let quota = cx.new(|_| QuotaState::new(source));
-    if refreshing {
+    if refresh_now {
         quota.update(cx, QuotaState::refresh);
+    }
+    if !quota.read(cx).is_mock() {
+        let polled = quota.clone();
+        cx.spawn(async move |cx| {
+            loop {
+                cx.background_executor().timer(POLL_INTERVAL).await;
+                cx.update(|cx| polled.update(cx, QuotaState::refresh));
+            }
+        })
+        .detach();
     }
 
     let (commands, received) = async_channel::unbounded();

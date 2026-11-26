@@ -1,24 +1,18 @@
+//! Signs accounts in through the providers' own CLIs, keeps their logins in the Keychain,
+//! and reads their live subscription quota.
+
+mod accounts;
 mod claude;
 mod codex;
+mod credential;
 mod error;
 mod http;
 mod keychain;
+mod plan;
+mod signin;
 
-use std::future::Future;
-
-use stint_core::{ProviderId, QuotaWindow};
-
-pub use claude::ClaudeProvider;
-pub use codex::CodexProvider;
+pub use accounts::Accounts;
+pub use credential::{ClaudeLogin, CodexLogin, Credential, Vault};
 pub use error::ProviderError;
 pub use http::client as http_client;
-
-/// Reads the live subscription quota of the account a provider's CLI is signed in to.
-///
-/// Implementations only read CLI credentials. They never refresh or rewrite them, so they
-/// cannot sign the CLI out.
-pub trait UsageProvider {
-    fn id(&self) -> ProviderId;
-
-    fn fetch(&self) -> impl Future<Output = Result<Vec<QuotaWindow>, ProviderError>> + Send;
-}
+pub use signin::{Enrolled, SignIn, new_credential_key};

@@ -23,6 +23,8 @@ objc2-core-foundation.workspace = true
 objc2-core-graphics.workspace = true
 objc2-foundation.workspace = true
 stint-core.workspace = true
+stint-providers.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

@@ -9,7 +9,6 @@ use crate::quota::QuotaSnapshot;
 pub use sqlite::SqliteStore;
 
 pub trait QuotaStore {
-    /// Adds an account. The first account of a provider becomes active.
     fn insert_account(
         &mut self,
         account: &NewAccount,
@@ -18,8 +17,8 @@ pub trait QuotaStore {
 
     fn accounts(&self) -> Result<Vec<AccountProfile>, StoreError>;
 
-    /// Makes `id` the only active account of its provider.
-    fn set_active_account(&mut self, id: AccountId) -> Result<(), StoreError>;
+    /// Removes an account and its snapshots.
+    fn remove_account(&mut self, id: AccountId) -> Result<(), StoreError>;
 
     fn record_snapshot(&mut self, snapshot: &QuotaSnapshot) -> Result<(), StoreError>;
 

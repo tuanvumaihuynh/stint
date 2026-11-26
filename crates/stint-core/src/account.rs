@@ -66,8 +66,13 @@ impl FromStr for ProviderId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewAccount {
     pub provider: ProviderId,
+    /// The nickname the account was added under, such as "Personal". Unique per provider.
     pub label: String,
     pub email: Option<String>,
+    /// The subscription, such as "Max 5x", when known.
+    pub plan: Option<String>,
+    /// Names the Keychain item that holds the account's login.
+    pub credential_key: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +81,8 @@ pub struct AccountProfile {
     pub provider: ProviderId,
     pub label: String,
     pub email: Option<String>,
-    pub is_active: bool,
+    pub plan: Option<String>,
+    pub credential_key: String,
     pub created_at: Timestamp,
 }
 

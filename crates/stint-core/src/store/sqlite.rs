@@ -16,7 +16,10 @@ use crate::error::StoreError;
 use crate::quota::QuotaSnapshot;
 
 // Append only. Each entry is one schema version tracked in `user_version`.
-static MIGRATION_LIST: [M<'static>; 1] = [M::up(include_str!("sqlite/migrations/0001_init.sql"))];
+static MIGRATION_LIST: [M<'static>; 2] = [
+    M::up(include_str!("sqlite/migrations/0001_init.sql")),
+    M::up(include_str!("sqlite/migrations/0002_tracked_accounts.sql")),
+];
 static MIGRATIONS: Migrations<'static> = Migrations::from_slice(&MIGRATION_LIST);
 const SCHEMA_VERSION: usize = MIGRATION_LIST.len();
 
@@ -100,8 +103,8 @@ impl QuotaStore for SqliteStore {
         accounts::list(&self.conn)
     }
 
-    fn set_active_account(&mut self, id: AccountId) -> Result<(), StoreError> {
-        accounts::set_active(&mut self.conn, id)
+    fn remove_account(&mut self, id: AccountId) -> Result<(), StoreError> {
+        accounts::remove(&self.conn, id)
     }
 
     fn record_snapshot(&mut self, snapshot: &QuotaSnapshot) -> Result<(), StoreError> {
@@ -192,6 +195,8 @@ mod tests {
             provider,
             label: label.into(),
             email: None,
+            plan: None,
+            credential_key: format!("{provider}-{label}"),
         }
     }
 
@@ -211,7 +216,7 @@ mod tests {
             MIGRATIONS
                 .pending_migrations(&Connection::open_in_memory().unwrap())
                 .unwrap(),
-            1
+            2
         );
     }
 

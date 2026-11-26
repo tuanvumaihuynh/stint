@@ -37,6 +37,14 @@ check: lint test
 cli *args:
     cargo run -p stint-cli -- {{args}}
 
+# Add a real account by signing in through its CLI (debug builds), e.g. `just add-account claude Personal`
+add-account provider name:
+    cargo run -p stint-app -- add-account {{provider}} "{{name}}"
+
+# Remove an account and its saved login (debug builds)
+remove-account provider name:
+    cargo run -p stint-app -- remove-account {{provider}} "{{name}}"
+
 # Run the stint macOS menu bar app; pass a scenario to use mock accounts, e.g. `just app default`
 app mock="":
     STINT_MOCK={{mock}} cargo run -p stint-app

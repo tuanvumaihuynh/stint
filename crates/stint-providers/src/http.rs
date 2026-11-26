@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use jiff::SignedDuration;
 use reqwest::StatusCode;
-use reqwest::header::{HeaderMap, RETRY_AFTER};
+use reqwest::header::{CONTENT_TYPE, HeaderMap, RETRY_AFTER};
+use serde::Serialize;
 
 use crate::error::ProviderError;
 
@@ -25,6 +26,35 @@ pub(crate) async fn send(request: reqwest::RequestBuilder) -> Result<Vec<u8>, Pr
     check_status(response.status(), response.headers())?;
     let body = response.bytes().await?;
     Ok(body.to_vec())
+}
+
+/// An answer read in full, whatever its status.
+pub(crate) struct Answer {
+    pub(crate) status: StatusCode,
+    pub(crate) headers: HeaderMap,
+    pub(crate) body: Vec<u8>,
+}
+
+/// Posts `body` as JSON and reads the answer, leaving failed statuses to the caller.
+pub(crate) async fn post_json(
+    client: &reqwest::Client,
+    url: &str,
+    body: &impl Serialize,
+) -> Result<Answer, ProviderError> {
+    let response = client
+        .post(url)
+        .header(CONTENT_TYPE, "application/json")
+        .body(serde_json::to_vec(body)?)
+        .send()
+        .await?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response.bytes().await?.to_vec();
+    Ok(Answer {
+        status,
+        headers,
+        body,
+    })
 }
 
 pub(crate) fn check_status(status: StatusCode, headers: &HeaderMap) -> Result<(), ProviderError> {

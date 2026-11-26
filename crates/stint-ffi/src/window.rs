@@ -194,6 +194,12 @@ fn issue(account: &AccountQuota, offline: bool, now: Timestamp) -> Option<Issue>
             Severity::Warning,
             false,
         )),
+        FetchError::NeedsSetup => Some(issue(
+            "Needs setup",
+            format!("open {name} once, then refresh"),
+            Severity::Warning,
+            false,
+        )),
     }
 }
 

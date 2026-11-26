@@ -117,6 +117,15 @@ private struct ProviderStep: View {
                 }
             }
             .groupBox()
+            if flow.provider == .antigravity {
+                Label(
+                    "Uses Google's internal API. Google may restrict accounts that use third-party tools.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -234,7 +243,7 @@ private struct WaitingStep: View {
             ProgressView().controlSize(.regular).padding(.top, 8)
             Text("Waiting for browser sign-in…")
                 .font(.headline)
-            (Text("Finish signing in to \(flow.provider.title) for ")
+            (Text("Finish signing in to \(flow.provider.signInService) for ")
                 + Text(flow.nickname).fontWeight(.semibold).foregroundStyle(.primary)
                 + Text(" in your browser. Stint will detect it automatically."))
                 .font(.body)

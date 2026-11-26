@@ -1,8 +1,13 @@
 //! Adding an account, or signing one in again, from the window.
 
+use std::process::Command;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
 
 use stint_core::{AccountId, NewAccount, ProviderId, QuotaStore, StoreError};
+use stint_providers::antigravity::Authorization;
 use stint_providers::{Enrolled, ProviderError, SignIn, SignInEvent, Vault, Watched};
 
 use crate::{Stint, StintError, menu};
@@ -21,24 +26,47 @@ pub trait SignInListener: Send + Sync {
     fn failed(&self, message: String, cancelled: bool);
 }
 
+// How long a browser sign-in waits for Google to send the user back.
+const BROWSER_LIMIT: Duration = Duration::from_mins(5);
+
 /// A sign-in in progress. Dropping it cancels the sign-in.
 #[derive(uniffi::Object)]
 pub struct SignInSession {
-    watched: Watched,
+    flow: Flow,
+}
+
+enum Flow {
+    /// The provider's CLI signs in.
+    Cli(Watched),
+    /// Stint signs in in the browser itself; set to cancel.
+    Browser(Arc<AtomicBool>),
+}
+
+impl Drop for SignInSession {
+    fn drop(&mut self) {
+        if let Flow::Browser(cancelled) = &self.flow {
+            cancelled.store(true, Ordering::SeqCst);
+        }
+    }
 }
 
 #[uniffi::export]
 impl SignInSession {
     /// Sends a code pasted from the sign-in page.
     pub fn submit_code(&self, code: &str) -> Result<(), StintError> {
-        self.watched
-            .submit_code(code)
-            .map_err(|_| StintError::Message("The sign-in no longer takes a code.".to_owned()))
+        let no_code = || StintError::Message("The sign-in no longer takes a code.".to_owned());
+        match &self.flow {
+            Flow::Cli(watched) => watched.submit_code(code).map_err(|_| no_code()),
+            Flow::Browser(_) => Err(no_code()),
+        }
     }
 
     /// Stops the sign-in; the listener then hears `failed` with `cancelled` set.
     pub fn cancel(&self) {
-        self.watched.cancel();
+        match &self.flow {
+            Flow::Cli(watched) => watched.cancel(),
+            Flow::Browser(cancelled) => cancelled.store(true, Ordering::SeqCst),
+        }
     }
 }
 
@@ -61,6 +89,9 @@ impl Stint {
             ));
         };
         let provider = self.check_target(&target)?;
+        if provider == ProviderId::Antigravity {
+            return self.sign_in_in_browser(target, listener);
+        }
         let attempt = SignIn::start(provider, data_dir)
             .map_err(|err| StintError::Message(failure(&err, provider)))?;
         let stint = self.clone();
@@ -68,23 +99,81 @@ impl Stint {
             .watch(move |event| match event {
                 SignInEvent::Link(url) => listener.link(url),
                 SignInEvent::CodePrompt => listener.code_prompt(),
-                SignInEvent::Finished(Ok(enrolled)) => {
-                    let (email, plan) = (enrolled.email.clone(), enrolled.plan.clone());
-                    match stint.save_login(&target, enrolled) {
-                        Ok(()) => {
-                            listener.succeeded(email, plan);
-                            stint.clone().refresh();
-                        }
-                        Err(message) => listener.failed(message, false),
-                    }
+                SignInEvent::Finished(enrolled) => {
+                    stint.finish(&target, enrolled, &*listener, provider);
                 }
-                SignInEvent::Finished(Err(err)) => listener.failed(
-                    failure(&err, provider),
-                    matches!(err, ProviderError::SignInCancelled),
-                ),
             })
             .map_err(|err| StintError::Message(failure(&err, provider)))?;
-        Ok(Arc::new(SignInSession { watched }))
+        Ok(Arc::new(SignInSession {
+            flow: Flow::Cli(watched),
+        }))
+    }
+
+    /// Opens Google's sign-in page and waits on a background thread for the browser to
+    /// come back, then finishes the sign-in on the runtime.
+    fn sign_in_in_browser(
+        self: &Arc<Self>,
+        target: Target,
+        listener: Arc<dyn SignInListener>,
+    ) -> Result<Arc<SignInSession>, StintError> {
+        let provider = ProviderId::Antigravity;
+        let authorization =
+            Authorization::start().map_err(|err| StintError::Message(failure(&err, provider)))?;
+        let client = stint_providers::http_client()
+            .map_err(|err| StintError::Message(failure(&err, provider)))?;
+        let url = authorization.url().to_owned();
+        listener.link(url.clone());
+        // Swift offers the link again if the browser did not open.
+        Command::new("/usr/bin/open").arg(&url).status().ok();
+
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flag = cancelled.clone();
+        let stint = self.clone();
+        thread::Builder::new()
+            .name("stint-sign-in".to_owned())
+            .spawn(move || {
+                let enrolled = authorization.wait(&flag, BROWSER_LIMIT).and_then(|code| {
+                    stint.runtime.block_on(stint_providers::antigravity::enroll(
+                        &client,
+                        &authorization,
+                        &code,
+                    ))
+                });
+                drop(authorization);
+                stint.finish(&target, enrolled, &*listener, provider);
+            })
+            .map_err(|err| {
+                StintError::Message(format!("Stint couldn't start the sign-in: {err}"))
+            })?;
+        Ok(Arc::new(SignInSession {
+            flow: Flow::Browser(cancelled),
+        }))
+    }
+
+    /// Saves a finished sign-in and tells the listener how it went.
+    fn finish(
+        self: &Arc<Self>,
+        target: &Target,
+        enrolled: Result<Enrolled, ProviderError>,
+        listener: &dyn SignInListener,
+        provider: ProviderId,
+    ) {
+        match enrolled {
+            Ok(enrolled) => {
+                let (email, plan) = (enrolled.email.clone(), enrolled.plan.clone());
+                match self.save_login(target, enrolled) {
+                    Ok(()) => {
+                        listener.succeeded(email, plan);
+                        self.clone().refresh();
+                    }
+                    Err(message) => listener.failed(message, false),
+                }
+            }
+            Err(err) => listener.failed(
+                failure(&err, provider),
+                matches!(err, ProviderError::SignInCancelled),
+            ),
+        }
     }
 
     /// The provider to sign in to, once the nickname or account is known to be usable.
@@ -96,11 +185,6 @@ impl Stint {
         let accounts = store.accounts().map_err(|err| store_failure(&err))?;
         match target {
             Target::New { provider, name } => {
-                if *provider == ProviderId::Antigravity {
-                    return Err(StintError::Message(
-                        "Antigravity accounts are coming later.".to_owned(),
-                    ));
-                }
                 if accounts
                     .iter()
                     .any(|a| a.provider == *provider && a.label == *name)
@@ -225,6 +309,19 @@ fn failure(err: &ProviderError, provider: ProviderId) -> String {
         }
         ProviderError::KeychainLocked => {
             "The Keychain is locked. Unlock it, then try again.".to_owned()
+        }
+        ProviderError::CallbackPortBusy(port) => format!(
+            "Another app is using port {port}, which Google sends the sign-in back to. \
+             Quit it, then try again."
+        ),
+        ProviderError::SignInRefused(reason) => format!("{reason}. Try again later."),
+        ProviderError::AccountSetup(reason) => format!(
+            "Signed in, but Google can't share this account's quota yet ({reason}). \
+             Open Antigravity once, then try again."
+        ),
+        ProviderError::SignInExpired => "Google refused the sign-in. Try again.".to_owned(),
+        ProviderError::Transport(_) | ProviderError::Status { .. } => {
+            "Stint couldn't reach Google. Check your connection, then try again.".to_owned()
         }
         ProviderError::Unsupported(_) => {
             format!(

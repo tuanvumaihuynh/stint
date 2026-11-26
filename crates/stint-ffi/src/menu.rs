@@ -209,16 +209,45 @@ fn subtitle(account: &AccountQuota, offline: bool, now: Timestamp) -> String {
             format::duration(at.duration_since(now))
         ),
         Some(FetchError::RateLimited { .. }) => "Rate limited".to_owned(),
+        Some(FetchError::NeedsSetup) => format!("Needs setup in {name}"),
     }
 }
 
 /// "5-hour 77% · Weekly 43% · resets 1h 12m", or "30-day 100% · Limit reached · resets 9d".
+/// Accounts that only report model groups get a line per group, such as
+/// "Gemini: 5-hour 20% · Weekly 6% · resets 4h".
 pub(crate) fn readings(windows: &[QuotaWindow], now: Timestamp) -> String {
-    let shown = shown_windows(windows);
-    if shown.is_empty() {
-        return "No usage reported yet".to_owned();
+    let plan_wide: Vec<&QuotaWindow> = windows.iter().filter(|w| w.scope.is_none()).collect();
+    if !plan_wide.is_empty() || windows.is_empty() {
+        return line(&shown_windows(&plan_wide), now)
+            .unwrap_or_else(|| "No usage reported yet".to_owned());
     }
+    // Only model groups, such as Antigravity's: one line each, in the order reported.
+    let mut scopes: Vec<&str> = Vec::new();
+    for scope in windows.iter().filter_map(|w| w.scope.as_deref()) {
+        if !scopes.contains(&scope) {
+            scopes.push(scope);
+        }
+    }
+    scopes
+        .into_iter()
+        .filter_map(|scope| {
+            let group: Vec<&QuotaWindow> = windows
+                .iter()
+                .filter(|w| w.scope.as_deref() == Some(scope))
+                .collect();
+            let readings = line(&shown_windows(&group), now)?;
+            Some(format!("{}: {readings}", scope_name(scope)))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
+/// "5-hour 77% · Weekly 43% · resets 1h 12m" for one set of windows.
+fn line(shown: &[&QuotaWindow], now: Timestamp) -> Option<String> {
+    if shown.is_empty() {
+        return None;
+    }
     let mut parts: Vec<String> = shown
         .iter()
         .map(|w| format!("{} {:.0}%", format::window_label(w.kind), w.used.get()))
@@ -237,20 +266,39 @@ pub(crate) fn readings(windows: &[QuotaWindow], now: Timestamp) -> String {
             format::duration(at.duration_since(now))
         ));
     }
-    parts.join(" · ")
+    Some(parts.join(" · "))
 }
 
-/// The plan-wide 5-hour and weekly windows; plans without those show what they have.
-fn shown_windows(windows: &[QuotaWindow]) -> Vec<&QuotaWindow> {
-    let plan_wide = || windows.iter().filter(|w| w.scope.is_none());
+/// The 5-hour and weekly windows of one group; groups without those show what they have.
+fn shown_windows<'a>(group: &[&'a QuotaWindow]) -> Vec<&'a QuotaWindow> {
     let main: Vec<&QuotaWindow> = [WindowKind::FiveHour, WindowKind::SevenDay]
         .into_iter()
-        .filter_map(|kind| plan_wide().find(|w| w.kind == kind))
+        .filter_map(|kind| group.iter().copied().find(|w| w.kind == kind))
         .collect();
     if main.is_empty() {
-        plan_wide().collect()
+        group.to_vec()
     } else {
         main
+    }
+}
+
+/// A model group's name, from the scope a provider reports it under.
+fn scope_name(scope: &str) -> String {
+    match scope {
+        "gemini" => "Gemini".to_owned(),
+        "3p" => "Claude & GPT".to_owned(),
+        other => {
+            let words = other.split(['-', '_']).filter(|word| !word.is_empty());
+            words
+                .map(|word| {
+                    let mut chars = word.chars();
+                    chars.next().map_or_else(String::new, |first| {
+                        first.to_uppercase().chain(chars).collect()
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        }
     }
 }
 
@@ -345,7 +393,7 @@ mod tests {
         let rows = entries(&data("default"), now());
         assert_eq!(
             header_of(&rows),
-            ("6 accounts · 2 need attention".to_owned(), Dot::Attention)
+            ("7 accounts · 2 need attention".to_owned(), Dot::Attention)
         );
         let pairs = accounts(&rows);
         let expected = [
@@ -358,6 +406,11 @@ mod tests {
             ("Personal · Plus", "5-hour 34% · Weekly 61% · resets 2h 05m"),
             ("Work · Team", "Rate limited · retry in 4m"),
             ("Free · Free", "30-day 100% · Limit reached · resets 9d"),
+            (
+                "Personal · Pro",
+                "Gemini: 5-hour 20% · Weekly 6% · resets 4h 15m\n\
+                 Claude & GPT: 5-hour 23% · Weekly 12% · resets 3h 10m",
+            ),
         ];
         let expected: Vec<(String, String)> = expected
             .iter()
@@ -366,7 +419,27 @@ mod tests {
         assert_eq!(pairs, expected);
         assert!(rows.contains(&section("Claude")));
         assert!(rows.contains(&section("Codex")));
+        assert!(rows.contains(&section("Antigravity")));
         assert_eq!(refresh_of(&rows), (Some("Updated 2m ago".to_owned()), true));
+    }
+
+    #[test]
+    fn group_names_read_plainly() {
+        assert_eq!(scope_name("gemini"), "Gemini");
+        assert_eq!(scope_name("3p"), "Claude & GPT");
+        assert_eq!(scope_name("gemini-argon_wtu"), "Gemini Argon Wtu");
+    }
+
+    #[test]
+    fn plan_wide_windows_hide_groups() {
+        let mut windows = data("default").accounts[0].windows.clone();
+        let mut grouped = windows[0].clone();
+        grouped.scope = Some("opus".to_owned());
+        windows.push(grouped);
+        assert_eq!(
+            readings(&windows, now()),
+            "5-hour 77% · Weekly 43% · resets 1h 12m"
+        );
     }
 
     #[test]
@@ -386,7 +459,7 @@ mod tests {
     #[test]
     fn refreshing_disables_refresh() {
         let rows = entries(&data("refreshing"), now());
-        assert_eq!(header_of(&rows).0, "Refreshing 6 accounts…");
+        assert_eq!(header_of(&rows).0, "Refreshing 7 accounts…");
         assert_eq!(refresh_of(&rows), (Some("Refreshing…".to_owned()), false));
     }
 
@@ -406,7 +479,7 @@ mod tests {
         let rows = entries(&data("offline"), now());
         assert_eq!(
             header_of(&rows),
-            ("Offline · 6 accounts".to_owned(), Dot::Idle)
+            ("Offline · 7 accounts".to_owned(), Dot::Idle)
         );
         let pairs = accounts(&rows);
         assert_eq!(pairs[0].1, "5-hour 77% · Weekly 43% · resets 1h 12m");
@@ -441,8 +514,11 @@ mod tests {
     #[test]
     fn busy_menu_groups_three_providers() {
         let rows = entries(&data("busy"), now());
-        assert_eq!(header_of(&rows).0, "10 accounts · 2 need attention");
+        assert_eq!(header_of(&rows).0, "10 accounts · 3 need attention");
         assert!(rows.contains(&section("Antigravity")));
-        assert_eq!(accounts(&rows).last().unwrap().1, "Not signed in");
+        assert_eq!(
+            accounts(&rows).last().unwrap().1,
+            "Needs setup in Antigravity"
+        );
     }
 }

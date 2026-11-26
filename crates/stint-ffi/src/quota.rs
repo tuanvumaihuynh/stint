@@ -15,6 +15,8 @@ pub(crate) enum FetchError {
         retry_at: Option<Timestamp>,
     },
     Offline,
+    /// The provider needs the account set up in its own app before it shares quota.
+    NeedsSetup,
 }
 
 /// One tracked account and its last known quota. A failed refresh keeps the old windows.
@@ -193,6 +195,7 @@ fn fetch_error(err: &ProviderError, now: Timestamp) -> FetchError {
         ProviderError::RateLimited { retry_after } => FetchError::RateLimited {
             retry_at: retry_after.map(|wait| now + wait),
         },
+        ProviderError::AccountSetup(_) => FetchError::NeedsSetup,
         // Anything else is retried on the next refresh, like an unreachable provider.
         _ => FetchError::Offline,
     }

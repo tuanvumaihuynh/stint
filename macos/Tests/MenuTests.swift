@@ -14,7 +14,7 @@ final class MenuTests: XCTestCase {
 
     func testDefaultMenuStartsWithTheHeader() throws {
         let menu = try XCTUnwrap(mockMenu(scenario: "default"))
-        XCTAssertEqual(menu.entries.first, .header(status: "6 accounts · 2 need attention", dot: .attention))
+        XCTAssertEqual(menu.entries.first, .header(status: "7 accounts · 2 need attention", dot: .attention))
         XCTAssertFalse(menu.offline)
     }
 

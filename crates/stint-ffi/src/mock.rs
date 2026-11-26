@@ -7,13 +7,14 @@ use stint_core::{AccountId, Percentage, ProviderId, QuotaWindow, WindowKind};
 use crate::quota::{AccountQuota, FetchError};
 
 /// Every scenario, in the order snapshots are taken.
-pub(crate) const SCENARIOS: [&str; 6] = [
+pub(crate) const SCENARIOS: [&str; 7] = [
     "default",
     "refreshing",
     "single",
     "busy",
     "offline",
     "empty",
+    "antigravity",
 ];
 
 /// The accounts of a scenario, or `None` for an unknown name.
@@ -24,6 +25,10 @@ pub(crate) fn scenario(name: &str, now: Timestamp) -> Option<Vec<AccountQuota>> 
         "busy" => busy(now),
         "offline" => offline(now),
         "empty" => Vec::new(),
+        "antigravity" => {
+            let fresh = Some(now - SignedDuration::from_mins(2));
+            vec![antigravity(now, fresh), studio()]
+        }
         _ => return None,
     };
     Some(
@@ -109,7 +114,29 @@ fn default(now: Timestamp) -> Vec<AccountQuota> {
             fresh,
             None,
         ),
+        antigravity(now, fresh),
     ]
+}
+
+/// An Antigravity account with its Gemini and Claude & GPT groups.
+fn antigravity(now: Timestamp, fetched_at: Option<Timestamp>) -> AccountQuota {
+    let scoped = |scope: &str, kind, used, resets_in_mins| QuotaWindow {
+        scope: Some(scope.to_owned()),
+        ..window(now, kind, used, resets_in_mins)
+    };
+    account(
+        ProviderId::Antigravity,
+        "Personal",
+        "Pro",
+        vec![
+            scoped("gemini", WindowKind::FiveHour, 20.0, 255),
+            scoped("gemini", WindowKind::SevenDay, 6.0, 4 * 1440),
+            scoped("3p", WindowKind::FiveHour, 23.0, 190),
+            scoped("3p", WindowKind::SevenDay, 12.0, 4 * 1440),
+        ],
+        fetched_at,
+        None,
+    )
 }
 
 fn busy(now: Timestamp) -> Vec<AccountQuota> {
@@ -143,23 +170,20 @@ fn busy(now: Timestamp) -> Vec<AccountQuota> {
             None,
         ),
     );
-    accounts.push(account(
-        ProviderId::Antigravity,
-        "Personal",
-        "AI Pro",
-        vec![window(now, WindowKind::Daily, 14.0, 230)],
-        fresh,
-        None,
-    ));
-    accounts.push(account(
+    accounts.push(studio());
+    accounts
+}
+
+/// An Antigravity account Google will not report on until it is set up.
+fn studio() -> AccountQuota {
+    account(
         ProviderId::Antigravity,
         "Studio",
         "Ultra",
         Vec::new(),
         None,
-        Some(FetchError::NotSignedIn),
-    ));
-    accounts
+        Some(FetchError::NeedsSetup),
+    )
 }
 
 fn offline(now: Timestamp) -> Vec<AccountQuota> {

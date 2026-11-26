@@ -9,6 +9,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private static let menuWidth: CGFloat = 298
     private static let titleSize: CGFloat = 13
     private static let statusSize: CGFloat = 11.5
+    // macOS draws item subtitles at this size.
+    private static let subtitleSize: CGFloat = 11
+    private static let readingLineHeight: CGFloat = 15
     // The status icon is dimmed while every account is offline.
     private static let offlineAlpha: CGFloat = 0.45
 
@@ -73,8 +76,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             return item
         case .account(let name, let plan, let subtitle):
             let plain = plan.map { "\(name) · \($0)" } ?? name
-            let item = passive(plain, subtitle: subtitle)
-            item.attributedTitle = Self.accountTitle(name: name, plan: plan)
+            let item = passive(plain)
+            item.attributedTitle = Self.accountTitle(name: name, plan: plan, readings: subtitle)
             return item
         case .notice(let title, let subtitle):
             return passive(title, subtitle: subtitle)
@@ -118,13 +121,26 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return title
     }
 
-    /// "Personal" in the label color, " · Max 5x" in the secondary one.
-    private static func accountTitle(name: String, plan: String?) -> NSAttributedString {
+    /// "Personal" in the label color, " · Max 5x" in the secondary one, over the readings
+    /// drawn like a subtitle. Unlike a subtitle, a reading line never wraps: the menu widens.
+    private static func accountTitle(name: String, plan: String?, readings: String) -> NSAttributedString {
         let font = NSFont.menuFont(ofSize: titleSize)
         let title = NSMutableAttributedString(attributedString: styled(name, font, .labelColor))
         if let plan {
             title.append(styled(" · \(plan)", font, .secondaryLabelColor))
         }
+        let lines = NSMutableAttributedString(
+            attributedString: styled("\n" + readings, .systemFont(ofSize: subtitleSize), .secondaryLabelColor)
+        )
+        // The spacing of a native subtitle.
+        let spacing = NSMutableParagraphStyle()
+        spacing.minimumLineHeight = readingLineHeight
+        spacing.maximumLineHeight = readingLineHeight
+        lines.addAttributes(
+            [.paragraphStyle: spacing],
+            range: NSRange(location: 0, length: lines.length)
+        )
+        title.append(lines)
         return title
     }
 

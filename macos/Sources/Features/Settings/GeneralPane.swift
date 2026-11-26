@@ -20,7 +20,7 @@ struct GeneralPane: View {
                     }
                     Spacer()
                     if let updates, updates.available != nil {
-                        Button("Update Available", action: updates.checkForUpdates)
+                        Button("Update Available") { updates.checkForUpdates() }
                             .controlSize(.small)
                             .buttonBorderShape(.capsule)
                     }
@@ -104,20 +104,22 @@ struct GeneralPane: View {
 /// Whether Stint checks for and installs new versions on its own, and checking now.
 private struct UpdatesSection: View {
     let updates: Updates
+    // Closures, not method references: Xcode 26's compiler crashes on the thunk for a
+    // main-actor method passed as a Binding setter.
 
     var body: some View {
         Section("Updates") {
-            Toggle(isOn: Binding(get: { updates.automaticallyChecks }, set: updates.setAutomaticallyChecks)) {
+            Toggle(isOn: Binding(get: { updates.automaticallyChecks }, set: { updates.setAutomaticallyChecks($0) })) {
                 Text("Check for updates automatically")
                 Text("Stint checks GitHub for a new version once a day.")
             }
-            Toggle(isOn: Binding(get: { updates.automaticallyDownloads }, set: updates.setAutomaticallyDownloads)) {
+            Toggle(isOn: Binding(get: { updates.automaticallyDownloads }, set: { updates.setAutomaticallyDownloads($0) })) {
                 Text("Download and install automatically")
                 Text("Install new versions the next time Stint quits.")
             }
             .disabled(!updates.automaticallyChecks)
             LabeledContent {
-                Button("Check for Updates", action: updates.checkForUpdates)
+                Button("Check for Updates") { updates.checkForUpdates() }
             } label: {
                 if let lastChecked = updates.lastChecked {
                     Text("Last checked \(lastChecked, format: .relative(presentation: .named))")

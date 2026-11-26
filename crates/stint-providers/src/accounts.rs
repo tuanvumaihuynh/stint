@@ -129,6 +129,11 @@ mod tests {
         assert!(accounts.lock("claude-b").is_ok());
 
         drop(held);
-        assert!(other.try_lock().is_ok());
+        // A process another test is spawning can hold a copy of the lock until it execs.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while other.try_lock().is_err() {
+            assert!(std::time::Instant::now() < deadline, "the lock was never released");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 }

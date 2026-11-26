@@ -5,7 +5,7 @@
 use std::io::{Read, Write as _};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -14,6 +14,9 @@ use crate::error::ProviderError;
 
 // How often the watcher checks whether the CLI has exited.
 const POLL: Duration = Duration::from_millis(100);
+// How long the outcome waits for the CLI's last output to be read. A process the CLI left
+// behind can hold its output open, so the wait is bounded.
+const DRAIN: Duration = Duration::from_secs(1);
 // Keeps the scanned output bounded however much the CLI prints.
 const MAX_SCANNED: usize = 64 * 1024;
 const CODE_PROMPT: &str = "Paste code";
@@ -63,11 +66,13 @@ impl SignIn {
         let mut child = command.spawn().map_err(ProviderError::io(program))?;
         let stdin = child.stdin.take();
         let scanner = Arc::new(Mutex::new(Scanner::default()));
+        // Each reader holds a sender until its stream ends.
+        let (drained, outputs_done) = mpsc::channel::<()>();
         if let Some(stdout) = child.stdout.take() {
-            read_output(stdout, scanner.clone(), listener.clone());
+            read_output(stdout, scanner.clone(), listener.clone(), drained.clone());
         }
         if let Some(stderr) = child.stderr.take() {
-            read_output(stderr, scanner, listener.clone());
+            read_output(stderr, scanner, listener.clone(), drained);
         }
 
         let child = Arc::new(Mutex::new(child));
@@ -82,6 +87,8 @@ impl SignIn {
                 }),
                 Err(err) => Err(err),
             };
+            // Report the link and prompt before the outcome.
+            outputs_done.recv_timeout(DRAIN).ok();
             // Removes the attempt's files before reporting the outcome.
             drop(self);
             listener(SignInEvent::Finished(result));
@@ -150,8 +157,11 @@ fn read_output(
     mut output: impl Read + Send + 'static,
     scanner: Arc<Mutex<Scanner>>,
     listener: Listener,
+    drained: mpsc::Sender<()>,
 ) {
     thread::spawn(move || {
+        // Dropped when the stream ends, which tells the watcher this output is read.
+        let _drained = drained;
         let mut buffer = [0_u8; 4096];
         while let Ok(read) = output.read(&mut buffer) {
             if read == 0 {

@@ -16,9 +16,11 @@ enum StintApp {
             return
         }
         #if DEBUG
-            // Debug builds can photograph the menu for design review: `just mac-snapshot`.
+            // Debug builds can photograph the menu and the window for design review: `just app-snapshot`.
             if let directory = MenuSnapshotter.requestedDirectory() {
                 delegate = MenuSnapshotter(directory: directory)
+            } else if let directory = WindowSnapshotter.requestedDirectory() {
+                delegate = WindowSnapshotter(directory: directory)
             } else {
                 delegate = AppDelegate()
             }
@@ -38,6 +40,7 @@ private final class IdleDelegate: NSObject, NSApplicationDelegate {}
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var core: CoreClient?
     private var statusMenu: StatusMenuController?
+    private var window: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let core: CoreClient
@@ -61,10 +64,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             core?.refresh()
         case .quit:
             NSApp.terminate(nil)
-        case .addAccount, .openStint, .settings:
-            // The desktop window comes next; until then these do nothing.
-            NSLog("stint: %@ is not available yet", commandTitle(command: command))
+        case .addAccount:
+            settingsWindow()?.addAccount()
+        case .openStint:
+            settingsWindow()?.show(.accounts)
+        case .settings:
+            settingsWindow()?.show(.general)
         }
+    }
+
+    private func settingsWindow() -> SettingsWindowController? {
+        if window == nil, let core {
+            window = SettingsWindowController(core: core)
+        }
+        return window
     }
 
     /// Made-up accounts in debug builds: `STINT_MOCK=default just mac-run`.

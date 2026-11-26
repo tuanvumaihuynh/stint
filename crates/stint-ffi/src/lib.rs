@@ -2,28 +2,37 @@
 //!
 //! The app holds one [`Stint`]. It owns the database, the Tokio runtime the providers run
 //! on, and the refresh schedule, and calls the app's [`Listener`] whenever what the app
-//! shows has changed. The app then reads [`Stint::menu`] and redraws.
+//! shows has changed. The app then reads [`Stint::menu`] or [`Stint::overview`] and
+//! redraws.
 
 mod format;
 mod menu;
 mod mock;
 mod quota;
+mod signin;
+mod window;
 
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use jiff::Timestamp;
-use stint_core::SqliteStore;
+use stint_core::{AccountId, QuotaStore, SqliteStore, StoreError};
 use stint_providers::{Accounts, Vault};
 
 use menu::MenuData;
 pub use menu::{Command, Dot, Entry};
 use quota::{QuotaState, Refresh, Source};
+use signin::Target;
+pub use signin::{SignInListener, SignInSession};
+pub use window::{AccountRow, Issue, Overview, Provider, Severity};
 
 uniffi::setup_scaffolding!();
 
-// How often real accounts refresh on their own.
-const POLL_INTERVAL: Duration = Duration::from_mins(5);
+// How often the refresh schedule is checked against the chosen interval.
+const POLL_TICK: Duration = Duration::from_secs(30);
+const REFRESH_SETTING: &str = "refresh_minutes";
 // How long a mock refresh pretends to take, so the refreshing state can be seen.
 const MOCK_REFRESH: Duration = Duration::from_millis(1200);
 
@@ -34,6 +43,9 @@ pub enum StintError {
     UnknownScenario(String),
     #[error("{0}")]
     Setup(String),
+    /// A message to show the user as is.
+    #[error("{0}")]
+    Message(String),
 }
 
 /// Told, from a background thread, that what the app shows has changed.
@@ -56,7 +68,11 @@ pub struct Stint {
     state: Mutex<QuotaState>,
     runtime: tokio::runtime::Runtime,
     accounts: Option<Accounts>,
+    // Where sign-ins run; `None` for made-up accounts.
+    data_dir: Option<PathBuf>,
     listener: Arc<dyn Listener>,
+    refresh_minutes: AtomicU32,
+    last_refresh: Mutex<Instant>,
 }
 
 #[uniffi::export]
@@ -70,11 +86,11 @@ impl Stint {
             .enable_all()
             .build()
             .map_err(|err| StintError::Setup(format!("start the runtime: {err}")))?;
-        let (source, accounts) = if let Some(scenario) = mock {
+        let (source, accounts, data_dir) = if let Some(scenario) = mock {
             if !mock::SCENARIOS.contains(&scenario.as_str()) {
                 return Err(StintError::UnknownScenario(scenario));
             }
-            (Source::Mock(scenario), None)
+            (Source::Mock(scenario), None, None)
         } else {
             let setup = |what: &str, err: &dyn std::fmt::Display| {
                 StintError::Setup(format!("{what}: {err}"))
@@ -86,8 +102,18 @@ impl Stint {
             let client = stint_providers::http_client()
                 .map_err(|err| setup("start the HTTP client", &err))?;
             let accounts = Accounts::new(client, Vault::new(), &data_dir);
-            (Source::Store(store), Some(accounts))
+            (Source::Store(store), Some(accounts), Some(data_dir))
         };
+        let refresh_minutes = match &source {
+            Source::Store(store) => store
+                .setting(REFRESH_SETTING)
+                .ok()
+                .flatten()
+                .and_then(|value| value.parse().ok())
+                .filter(|minutes| window::REFRESH_CHOICES.contains(minutes)),
+            Source::Mock(_) => None,
+        }
+        .unwrap_or(window::DEFAULT_REFRESH_MINUTES);
         let starts_refreshing = match &source {
             Source::Store(_) => true,
             Source::Mock(name) => mock::refreshing(name),
@@ -96,7 +122,10 @@ impl Stint {
             state: Mutex::new(QuotaState::new(source)),
             runtime,
             accounts,
+            data_dir,
             listener,
+            refresh_minutes: AtomicU32::new(refresh_minutes),
+            last_refresh: Mutex::new(Instant::now()),
         });
         if starts_refreshing {
             stint.clone().refresh();
@@ -105,25 +134,145 @@ impl Stint {
             let weak = Arc::downgrade(&stint);
             stint.runtime.spawn(async move {
                 loop {
-                    tokio::time::sleep(POLL_INTERVAL).await;
+                    tokio::time::sleep(POLL_TICK).await;
                     let Some(stint) = weak.upgrade() else { return };
-                    stint.refresh();
+                    if stint.refresh_due() {
+                        stint.refresh();
+                    }
                 }
             });
         }
         Ok(stint)
     }
 
-    /// The status menu as of now.
+    /// The status menu as of now. Accounts hidden from the menu are left out.
     pub fn menu(&self) -> Menu {
         let state = self.state();
-        menu_of(&state.accounts, state.refreshing, Timestamp::now())
+        let shown: Vec<_> = state
+            .accounts
+            .iter()
+            .filter(|account| account.shown_in_menu)
+            .cloned()
+            .collect();
+        menu_of(&shown, state.refreshing, Timestamp::now())
+    }
+
+    /// The window as of now.
+    pub fn overview(&self) -> Overview {
+        let state = self.state();
+        window::overview(
+            &state.accounts,
+            state.refreshing,
+            self.refresh_minutes.load(Ordering::SeqCst),
+            Timestamp::now(),
+        )
+    }
+
+    /// The refresh intervals offered, in minutes.
+    pub fn refresh_choices(&self) -> Vec<u32> {
+        window::REFRESH_CHOICES.to_vec()
+    }
+
+    /// Sets how often accounts refresh on their own, and remembers it.
+    pub fn set_refresh_minutes(&self, minutes: u32) -> Result<(), StintError> {
+        if !window::REFRESH_CHOICES.contains(&minutes) {
+            return Err(StintError::Message(format!(
+                "{minutes} minutes is not a refresh interval."
+            )));
+        }
+        if let Some(store) = self.state().store_mut() {
+            store
+                .set_setting(REFRESH_SETTING, &minutes.to_string())
+                .map_err(|err| signin::store_failure(&err))?;
+        }
+        self.refresh_minutes.store(minutes, Ordering::SeqCst);
+        self.listener.changed();
+        Ok(())
+    }
+
+    /// Gives an account a new nickname.
+    pub fn rename_account(&self, id: i64, name: &str) -> Result<(), StintError> {
+        let name = nickname(name)?;
+        self.edit(
+            id,
+            |store, id| store.rename_account(id, &name),
+            |account| account.name.clone_from(&name),
+        )
+    }
+
+    /// Lists an account in the status menu, or hides it there.
+    pub fn set_shown_in_menu(&self, id: i64, shown: bool) -> Result<(), StintError> {
+        self.edit(
+            id,
+            |store, id| store.set_shown_in_menu(id, shown),
+            |account| account.shown_in_menu = shown,
+        )
+    }
+
+    /// Stops tracking an account and deletes its saved login.
+    pub fn remove_account(&self, id: i64) -> Result<(), StintError> {
+        let id = AccountId::new(id);
+        let mut state = self.state();
+        let Some(store) = state.store_mut() else {
+            state.accounts.retain(|account| account.id != id);
+            drop(state);
+            self.listener.changed();
+            return Ok(());
+        };
+        let key = store
+            .accounts()
+            .map_err(|err| signin::store_failure(&err))?
+            .into_iter()
+            .find(|account| account.id == id)
+            .map(|account| account.credential_key);
+        store
+            .remove_account(id)
+            .map_err(|err| signin::store_failure(&err))?;
+        state.reload();
+        drop(state);
+        if let Some(key) = key
+            && let Err(err) = Vault::new().delete(&key)
+        {
+            eprintln!("stint: delete the login of account {id}: {err}");
+        }
+        self.listener.changed();
+        Ok(())
+    }
+
+    /// Adds an account by signing in to `provider` in the browser, under nickname `name`.
+    pub fn add_account(
+        self: Arc<Self>,
+        provider: Provider,
+        name: &str,
+        listener: Arc<dyn SignInListener>,
+    ) -> Result<Arc<SignInSession>, StintError> {
+        let name = nickname(name)?;
+        let target = Target::New {
+            provider: provider.into(),
+            name,
+        };
+        self.start_sign_in(target, listener)
+    }
+
+    /// Signs an account in again, keeping its nickname and history.
+    pub fn sign_in_again(
+        self: Arc<Self>,
+        id: i64,
+        listener: Arc<dyn SignInListener>,
+    ) -> Result<Arc<SignInSession>, StintError> {
+        let target = Target::Existing {
+            id: AccountId::new(id),
+        };
+        self.start_sign_in(target, listener)
     }
 
     /// Fetches every account's quota in the background. A refresh already running is not
     /// restarted.
     pub fn refresh(self: Arc<Self>) {
         let refresh = self.state().begin_refresh();
+        if !matches!(refresh, Refresh::Busy) {
+            *self.last_refresh() = Instant::now();
+        }
         match refresh {
             Refresh::Busy => {}
             Refresh::Reloaded => self.listener.changed(),
@@ -156,6 +305,51 @@ impl Stint {
     fn state(&self) -> MutexGuard<'_, QuotaState> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
+
+    fn last_refresh(&self) -> MutexGuard<'_, Instant> {
+        self.last_refresh
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn refresh_due(&self) -> bool {
+        let minutes = self.refresh_minutes.load(Ordering::SeqCst);
+        self.last_refresh().elapsed() >= Duration::from_secs(u64::from(minutes) * 60)
+    }
+
+    /// Changes one account in the database, or in place for made-up accounts.
+    fn edit(
+        &self,
+        id: i64,
+        stored: impl FnOnce(&mut SqliteStore, AccountId) -> Result<(), StoreError>,
+        made_up: impl FnOnce(&mut quota::AccountQuota),
+    ) -> Result<(), StintError> {
+        let id = AccountId::new(id);
+        let mut state = self.state();
+        if let Some(store) = state.store_mut() {
+            stored(store, id).map_err(|err| match err {
+                StoreError::DuplicateAccount { provider, label } => {
+                    signin::duplicate(provider, &label)
+                }
+                err => signin::store_failure(&err),
+            })?;
+            state.reload();
+        } else if let Some(account) = state.accounts.iter_mut().find(|a| a.id == id) {
+            made_up(account);
+        }
+        drop(state);
+        self.listener.changed();
+        Ok(())
+    }
+}
+
+/// A nickname as entered, trimmed; it cannot be blank.
+fn nickname(name: &str) -> Result<String, StintError> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(StintError::Message("Enter a nickname.".to_owned()));
+    }
+    Ok(name.to_owned())
 }
 
 /// The menu title of a command, such as "Settings…".
@@ -227,6 +421,65 @@ mod tests {
         std::thread::sleep(MOCK_REFRESH + Duration::from_millis(500));
         assert!(!stint.state().refreshing);
         assert_eq!(counter.0.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn made_up_accounts_can_be_edited() {
+        let counter = Arc::new(Counter::default());
+        let stint = Stint::new(Some("default".into()), counter.clone()).unwrap();
+        let first = stint.overview().accounts[0].clone();
+
+        stint.rename_account(first.id, "  Main ").unwrap();
+        assert_eq!(stint.overview().accounts[0].name, "Main");
+        assert!(matches!(
+            stint.rename_account(first.id, " "),
+            Err(StintError::Message(_))
+        ));
+
+        let accounts_in_menu = |stint: &Stint| {
+            stint
+                .menu()
+                .entries
+                .iter()
+                .filter(|entry| matches!(entry, Entry::Account { .. }))
+                .count()
+        };
+        let before = accounts_in_menu(&stint);
+        stint.set_shown_in_menu(first.id, false).unwrap();
+        assert_eq!(accounts_in_menu(&stint), before - 1);
+
+        let count = stint.overview().accounts.len();
+        stint.remove_account(first.id).unwrap();
+        assert_eq!(stint.overview().accounts.len(), count - 1);
+        assert!(counter.0.load(Ordering::SeqCst) >= 3);
+    }
+
+    #[test]
+    fn refresh_interval_is_one_of_the_choices() {
+        let counter = Arc::new(Counter::default());
+        let stint = Stint::new(Some("default".into()), counter).unwrap();
+        assert_eq!(stint.overview().refresh_minutes, 5);
+        stint.set_refresh_minutes(10).unwrap();
+        assert_eq!(stint.overview().refresh_minutes, 10);
+        assert!(stint.set_refresh_minutes(7).is_err());
+        assert!(!stint.refresh_due());
+    }
+
+    #[test]
+    fn made_up_accounts_cannot_sign_in() {
+        struct Quiet;
+        impl SignInListener for Quiet {
+            fn link(&self, _: String) {}
+            fn code_prompt(&self) {}
+            fn succeeded(&self, _: Option<String>, _: Option<String>) {}
+            fn failed(&self, _: String, _: bool) {}
+        }
+        let counter = Arc::new(Counter::default());
+        let stint = Stint::new(Some("default".into()), counter).unwrap();
+        assert!(matches!(
+            stint.add_account(Provider::Claude, "New", Arc::new(Quiet)),
+            Err(StintError::Message(_))
+        ));
     }
 
     #[test]

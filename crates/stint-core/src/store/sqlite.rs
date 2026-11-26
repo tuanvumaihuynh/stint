@@ -1,4 +1,5 @@
 mod accounts;
+mod settings;
 mod snapshots;
 
 use std::fs;
@@ -16,9 +17,10 @@ use crate::error::StoreError;
 use crate::quota::QuotaSnapshot;
 
 // Append only. Each entry is one schema version tracked in `user_version`.
-static MIGRATION_LIST: [M<'static>; 2] = [
+static MIGRATION_LIST: [M<'static>; 3] = [
     M::up(include_str!("sqlite/migrations/0001_init.sql")),
     M::up(include_str!("sqlite/migrations/0002_tracked_accounts.sql")),
+    M::up(include_str!("sqlite/migrations/0003_window_settings.sql")),
 ];
 static MIGRATIONS: Migrations<'static> = Migrations::from_slice(&MIGRATION_LIST);
 const SCHEMA_VERSION: usize = MIGRATION_LIST.len();
@@ -105,6 +107,31 @@ impl QuotaStore for SqliteStore {
 
     fn remove_account(&mut self, id: AccountId) -> Result<(), StoreError> {
         accounts::remove(&self.conn, id)
+    }
+
+    fn rename_account(&mut self, id: AccountId, label: &str) -> Result<(), StoreError> {
+        accounts::rename(&self.conn, id, label)
+    }
+
+    fn set_account_login(
+        &mut self,
+        id: AccountId,
+        email: Option<&str>,
+        plan: Option<&str>,
+    ) -> Result<(), StoreError> {
+        accounts::set_login(&self.conn, id, email, plan)
+    }
+
+    fn set_shown_in_menu(&mut self, id: AccountId, shown: bool) -> Result<(), StoreError> {
+        accounts::set_shown_in_menu(&self.conn, id, shown)
+    }
+
+    fn setting(&self, key: &str) -> Result<Option<String>, StoreError> {
+        settings::get(&self.conn, key)
+    }
+
+    fn set_setting(&mut self, key: &str, value: &str) -> Result<(), StoreError> {
+        settings::set(&self.conn, key, value)
     }
 
     fn record_snapshot(&mut self, snapshot: &QuotaSnapshot) -> Result<(), StoreError> {
@@ -216,7 +243,7 @@ mod tests {
             MIGRATIONS
                 .pending_migrations(&Connection::open_in_memory().unwrap())
                 .unwrap(),
-            2
+            3
         );
     }
 

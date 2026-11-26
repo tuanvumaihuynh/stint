@@ -84,7 +84,8 @@ impl Command {
     }
 }
 
-const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Codex, ProviderId::Gemini];
+pub(crate) const PROVIDERS: [ProviderId; 3] =
+    [ProviderId::Claude, ProviderId::Codex, ProviderId::Gemini];
 
 /// The menu rows for `data` as of `now`.
 pub(crate) fn entries(data: &MenuData, now: Timestamp) -> Vec<Entry> {
@@ -150,7 +151,7 @@ pub(crate) fn is_offline(accounts: &[AccountQuota]) -> bool {
     accounts.iter().any(|a| offline(&a)) && accounts.iter().all(|a| offline(&a) || expired(&a))
 }
 
-fn header(data: &MenuData, offline: bool) -> Entry {
+pub(crate) fn header(data: &MenuData, offline: bool) -> Entry {
     let total = data.accounts.len();
     let accounts = format::count(total, "account");
     let attention = data
@@ -209,7 +210,7 @@ fn subtitle(account: &AccountQuota, offline: bool, now: Timestamp) -> String {
 }
 
 /// "5-hour 77% · Weekly 43% · resets 1h 12m", or "30-day 100% · Limit reached · resets 9d".
-fn readings(windows: &[QuotaWindow], now: Timestamp) -> String {
+pub(crate) fn readings(windows: &[QuotaWindow], now: Timestamp) -> String {
     let shown = shown_windows(windows);
     if shown.is_empty() {
         return "No usage reported yet".to_owned();

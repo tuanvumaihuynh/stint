@@ -9,11 +9,17 @@ const INSERT: &str = "
     INSERT INTO accounts (provider, label, email, plan, credential_key, created_at)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6)";
 
-const COLUMNS: &str = "id, provider, label, email, plan, credential_key, created_at";
+const COLUMNS: &str = "id, provider, label, email, plan, credential_key, shown_in_menu, created_at";
 
 const EXISTS: &str = "SELECT 1 FROM accounts WHERE id = ?1";
 
 const DELETE: &str = "DELETE FROM accounts WHERE id = ?1";
+
+const RENAME: &str = "UPDATE accounts SET label = ?2 WHERE id = ?1";
+
+const SET_LOGIN: &str = "UPDATE accounts SET email = ?2, plan = ?3 WHERE id = ?1";
+
+const SET_SHOWN: &str = "UPDATE accounts SET shown_in_menu = ?2 WHERE id = ?1";
 
 pub(super) fn insert(
     conn: &mut Connection,
@@ -54,7 +60,54 @@ pub(super) fn list(conn: &Connection) -> Result<Vec<AccountProfile>, StoreError>
 
 pub(super) fn remove(conn: &Connection, id: AccountId) -> Result<(), StoreError> {
     let removed = conn.prepare_cached(DELETE)?.execute([id])?;
-    if removed == 0 {
+    found(removed, id)
+}
+
+pub(super) fn rename(conn: &Connection, id: AccountId, label: &str) -> Result<(), StoreError> {
+    let renamed = conn.prepare_cached(RENAME)?.execute(params![id, label]);
+    match renamed {
+        Ok(changed) => found(changed, id),
+        Err(err) if err.sqlite_error_code() == Some(ErrorCode::ConstraintViolation) => {
+            let provider = list(conn)?
+                .into_iter()
+                .find(|account| account.id == id)
+                .map(|account| account.provider)
+                .ok_or(StoreError::AccountNotFound(id))?;
+            Err(StoreError::DuplicateAccount {
+                provider,
+                label: label.to_owned(),
+            })
+        }
+        Err(err) => Err(err.into()),
+    }
+}
+
+pub(super) fn set_login(
+    conn: &Connection,
+    id: AccountId,
+    email: Option<&str>,
+    plan: Option<&str>,
+) -> Result<(), StoreError> {
+    let changed = conn
+        .prepare_cached(SET_LOGIN)?
+        .execute(params![id, email, plan])?;
+    found(changed, id)
+}
+
+pub(super) fn set_shown_in_menu(
+    conn: &Connection,
+    id: AccountId,
+    shown: bool,
+) -> Result<(), StoreError> {
+    let changed = conn
+        .prepare_cached(SET_SHOWN)?
+        .execute(params![id, shown])?;
+    found(changed, id)
+}
+
+/// Fails with [`StoreError::AccountNotFound`] when a statement changed no row.
+fn found(changed: usize, id: AccountId) -> Result<(), StoreError> {
+    if changed == 0 {
         return Err(StoreError::AccountNotFound(id));
     }
     Ok(())
@@ -68,7 +121,7 @@ pub(super) fn require(conn: &Connection, id: AccountId) -> Result<(), StoreError
 }
 
 fn from_row(row: &Row<'_>) -> rusqlite::Result<AccountProfile> {
-    let created_at: Millis = row.get(6)?;
+    let created_at: Millis = row.get(7)?;
     Ok(AccountProfile {
         id: row.get(0)?,
         provider: row.get(1)?,
@@ -76,6 +129,7 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<AccountProfile> {
         email: row.get(3)?,
         plan: row.get(4)?,
         credential_key: row.get(5)?,
+        shown_in_menu: row.get(6)?,
         created_at: created_at.0,
     })
 }
@@ -128,6 +182,38 @@ mod tests {
         assert!(matches!(
             store.insert_account(&again, t0()),
             Err(StoreError::DuplicateAccount { provider: ProviderId::Codex, label }) if label == "personal"
+        ));
+    }
+
+    #[test]
+    fn accounts_can_be_renamed_relabelled_and_hidden() {
+        let mut store = store();
+        let a = store
+            .insert_account(&new_account(ProviderId::Claude, "a"), t0())
+            .unwrap();
+        store
+            .insert_account(&new_account(ProviderId::Claude, "b"), t0())
+            .unwrap();
+        assert!(a.shown_in_menu);
+
+        store.rename_account(a.id, "Personal").unwrap();
+        store
+            .set_account_login(a.id, Some("me@example.com"), Some("Pro"))
+            .unwrap();
+        store.set_shown_in_menu(a.id, false).unwrap();
+        let a = store.accounts().unwrap().remove(0);
+        assert_eq!(a.label, "Personal");
+        assert_eq!(a.email.as_deref(), Some("me@example.com"));
+        assert_eq!(a.plan.as_deref(), Some("Pro"));
+        assert!(!a.shown_in_menu);
+
+        assert!(matches!(
+            store.rename_account(a.id, "b"),
+            Err(StoreError::DuplicateAccount { label, .. }) if label == "b"
+        ));
+        assert!(matches!(
+            store.set_shown_in_menu(AccountId::new(9), true),
+            Err(StoreError::AccountNotFound(_))
         ));
     }
 

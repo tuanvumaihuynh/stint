@@ -26,10 +26,16 @@ pub(crate) fn duration(span: SignedDuration) -> String {
     }
 }
 
-/// How long ago `at` was, or `None` when it was under a minute ago.
+/// How long ago `at` was in its largest unit, such as "22m", "3h", or "2d", or `None`
+/// when it was under a minute ago.
 pub(crate) fn age(now: Timestamp, at: Timestamp) -> Option<String> {
-    let ago = now.duration_since(at);
-    (ago >= SignedDuration::from_mins(1)).then(|| duration(ago))
+    let minutes = now.duration_since(at).as_secs() / 60;
+    match minutes {
+        ..1 => None,
+        1..60 => Some(format!("{minutes}m")),
+        60..1440 => Some(format!("{}h", minutes / 60)),
+        _ => Some(format!("{}d", minutes / 1440)),
+    }
 }
 
 /// "1 account", "6 accounts".
@@ -72,6 +78,14 @@ mod tests {
         assert_eq!(
             age(now(), now() - SignedDuration::from_mins(22)).as_deref(),
             Some("22m")
+        );
+        assert_eq!(
+            age(now(), now() - SignedDuration::from_mins(185)).as_deref(),
+            Some("3h")
+        );
+        assert_eq!(
+            age(now(), now() - SignedDuration::from_hours(50)).as_deref(),
+            Some("2d")
         );
     }
 

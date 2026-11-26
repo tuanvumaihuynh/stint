@@ -17,14 +17,23 @@ lint: fmt-check
 test:
     cargo test --workspace --locked
 
-# Lint and test the macOS menu bar app (macOS only)
-app-check:
-    cargo clippy -p stint-app --all-targets --locked -- -D warnings
-    cargo test -p stint-app --locked
+# Build the Rust core for the macOS app and write its Swift bindings (macOS only)
+ffi profile="debug":
+    macos/scripts/build-ffi.sh {{profile}}
+
+# Build the macOS app with Xcode; pass `Release` for an optimized build (macOS only)
+app-build config="Debug":
+    just ffi {{ if config == "Release" { "release" } else { "debug" } }}
+    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration {{config}} -derivedDataPath macos/build build
+
+# Run the macOS app's unit tests (macOS only)
+app-test:
+    just ffi
+    xcodebuild -quiet -project macos/Stint.xcodeproj -scheme Stint -configuration Debug -derivedDataPath macos/build test
 
 # Photograph the status menu in every mock scenario, light and dark (macOS only)
-app-snapshot dir="target/snapshots":
-    cargo run -p stint-app -- snapshot {{dir}}
+app-snapshot dir="target/snapshots": app-build
+    macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint --snapshot "$(cd {{justfile_directory()}} && mkdir -p {{dir}} && cd {{dir}} && pwd)"
 
 # Audit dependencies against the RustSec advisory database
 vuln:
@@ -37,14 +46,14 @@ check: lint test
 cli *args:
     cargo run -p stint-cli -- {{args}}
 
-# Add a real account by signing in through its CLI (debug builds), e.g. `just add-account claude Personal`
+# Add a real account by signing in through its CLI, e.g. `just add-account claude Personal`
 add-account provider name:
-    cargo run -p stint-app -- add-account {{provider}} "{{name}}"
+    cargo run -p stint-dev -- add-account {{provider}} "{{name}}"
 
-# Remove an account and its saved login (debug builds)
+# Remove an account and its saved login
 remove-account provider name:
-    cargo run -p stint-app -- remove-account {{provider}} "{{name}}"
+    cargo run -p stint-dev -- remove-account {{provider}} "{{name}}"
 
-# Run the stint macOS menu bar app; pass a scenario to use mock accounts, e.g. `just app default`
-app mock="":
-    STINT_MOCK={{mock}} cargo run -p stint-app
+# Run the macOS app; pass a scenario to use mock accounts, e.g. `just app default` (macOS only)
+app mock="": app-build
+    STINT_MOCK={{mock}} macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint

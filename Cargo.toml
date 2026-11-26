@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/stint-app", "crates/stint-core", "crates/stint-providers"]
+members = ["crates/stint-core", "crates/stint-dev", "crates/stint-ffi", "crates/stint-providers"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,17 +13,9 @@ stint-core = { path = "crates/stint-core" }
 stint-providers = { path = "crates/stint-providers" }
 
 anyhow = "1.0.105"
-async-channel = "2.5.0"
 base64 = "0.23.1"
-block2 = "0.6.2"
-gpui-kit = "=0.11.0"
 jiff = { version = "1.0.3", default-features = false, features = ["std"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
-objc2 = "0.6.5"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-core-graphics", "NSAppearance", "NSApplication", "NSAttributedString", "NSBitmapImageRep", "NSButton", "NSColor", "NSControl", "NSFont", "NSFontDescriptor", "NSImage", "NSImageRep", "NSMenu", "NSMenuItem", "NSResponder", "NSRunningApplication", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView"] }
-objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes"] }
-objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGImage", "CGWindow"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSData", "NSDate", "NSDictionary", "NSGeometry", "NSObject", "NSRunLoop", "NSString", "NSTimer", "NSValue"] }
 rusqlite = { version = "0.43.0", default-features = false, features = ["bundled", "cache"] }
 rusqlite_migration = { version = "2.9.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -32,6 +24,7 @@ sha2 = "0.11.2"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", default-features = false, features = ["rt"] }
+uniffi = "0.33.0"
 unicode-normalization = "0.1.26"
 
 [workspace.lints.rust]

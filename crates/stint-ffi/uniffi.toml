@@ -1,0 +1,5 @@
+[bindings.swift]
+# `import StintCore` in the app; the generated C module behind it is StintCoreFFI.
+module_name = "StintCore"
+ffi_module_name = "StintCoreFFI"
+ffi_module_filename = "StintCoreFFI"

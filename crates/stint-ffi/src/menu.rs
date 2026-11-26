@@ -1,4 +1,4 @@
-//! What the status menu shows, as plain data. The AppKit side only draws these entries.
+//! What the status menu shows, as plain data. The Swift side only draws these entries.
 
 use jiff::Timestamp;
 use stint_core::{ProviderId, QuotaWindow, WindowKind};
@@ -14,15 +14,17 @@ pub(crate) struct MenuData {
 }
 
 /// One row of the menu, top to bottom.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Entry {
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum Entry {
     /// App icon, "Stint", and a one-line status after a colored dot.
     Header {
         status: String,
         dot: Dot,
     },
     /// A provider name above its accounts.
-    Section(&'static str),
+    Section {
+        title: String,
+    },
     /// "Personal · Max 5x" over its readings. It has no action.
     Account {
         name: String,
@@ -31,8 +33,8 @@ pub(crate) enum Entry {
     },
     /// A passive two-line message, such as the empty state.
     Notice {
-        title: &'static str,
-        subtitle: &'static str,
+        title: String,
+        subtitle: String,
     },
     Command {
         command: Command,
@@ -43,15 +45,15 @@ pub(crate) enum Entry {
 }
 
 /// The header dot: healthy, something needs attention, or nothing live to report.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Dot {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum Dot {
     Healthy,
     Attention,
     Idle,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Command {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum Command {
     Refresh,
     AddAccount,
     OpenStint,
@@ -92,8 +94,8 @@ pub(crate) fn entries(data: &MenuData, now: Timestamp) -> Vec<Entry> {
 
     if accounts.is_empty() {
         rows.push(Entry::Notice {
-            title: "No accounts yet",
-            subtitle: "Add an account to start tracking usage.",
+            title: "No accounts yet".to_owned(),
+            subtitle: "Add an account to start tracking usage.".to_owned(),
         });
         rows.push(command(Command::AddAccount, None, true));
     } else {
@@ -105,7 +107,9 @@ pub(crate) fn entries(data: &MenuData, now: Timestamp) -> Vec<Entry> {
             if group.peek().is_none() {
                 continue;
             }
-            rows.push(Entry::Section(provider_name(provider)));
+            rows.push(Entry::Section {
+                title: provider_name(provider).to_owned(),
+            });
             rows.extend(group.map(|account| Entry::Account {
                 name: account.name.clone(),
                 plan: account.plan.clone(),
@@ -306,6 +310,12 @@ mod tests {
             .collect()
     }
 
+    fn section(title: &str) -> Entry {
+        Entry::Section {
+            title: title.to_owned(),
+        }
+    }
+
     fn header_of(rows: &[Entry]) -> (String, Dot) {
         match &rows[0] {
             Entry::Header { status, dot } => (status.clone(), *dot),
@@ -350,8 +360,8 @@ mod tests {
             .map(|(t, s)| ((*t).to_owned(), (*s).to_owned()))
             .collect();
         assert_eq!(pairs, expected);
-        assert!(rows.contains(&Entry::Section("Claude")));
-        assert!(rows.contains(&Entry::Section("Codex")));
+        assert!(rows.contains(&section("Claude")));
+        assert!(rows.contains(&section("Codex")));
         assert_eq!(refresh_of(&rows), (Some("Updated 2m ago".to_owned()), true));
     }
 
@@ -383,8 +393,8 @@ mod tests {
             header_of(&rows),
             ("Tracking 1 account".to_owned(), Dot::Healthy)
         );
-        assert!(rows.contains(&Entry::Section("Claude")));
-        assert!(!rows.contains(&Entry::Section("Codex")));
+        assert!(rows.contains(&section("Claude")));
+        assert!(!rows.contains(&section("Codex")));
     }
 
     #[test]
@@ -428,7 +438,7 @@ mod tests {
     fn busy_menu_groups_three_providers() {
         let rows = entries(&data("busy"), now());
         assert_eq!(header_of(&rows).0, "10 accounts · 2 need attention");
-        assert!(rows.contains(&Entry::Section("Gemini")));
+        assert!(rows.contains(&section("Gemini")));
         assert_eq!(accounts(&rows).last().unwrap().1, "Not signed in");
     }
 }

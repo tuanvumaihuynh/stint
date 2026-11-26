@@ -1,5 +1,5 @@
-//! Adds and removes real accounts from the terminal until the desktop window can (debug
-//! builds only): `stint-app add-account claude Personal`.
+//! Adds and removes real accounts from the terminal until the desktop window can:
+//! `just add-account claude Personal`. A development tool; it is not shipped.
 //!
 //! Adding runs the provider's CLI sign-in in a private directory, with this terminal as
 //! its input and output, so its browser link and code prompt work as usual.
@@ -11,20 +11,11 @@ use jiff::Timestamp;
 use stint_core::{NewAccount, ProviderId, QuotaStore, SqliteStore};
 use stint_providers::{SignIn, Vault, new_credential_key};
 
-const USAGE: &str = "usage: stint-app add-account <claude|codex> <name>\n       stint-app remove-account <claude|codex> <name>";
+const USAGE: &str = "usage: stint-dev add-account <claude|codex> <name>\n       stint-dev remove-account <claude|codex> <name>";
 
-/// The command and its arguments, when the app was started as one.
-pub(crate) fn requested() -> Option<Vec<String>> {
+fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    matches!(
-        args.first().map(String::as_str),
-        Some("add-account" | "remove-account")
-    )
-    .then_some(args)
-}
-
-pub(crate) fn run(args: &[String]) -> ExitCode {
-    match dispatch(args) {
+    match dispatch(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("stint: {err:#}");
@@ -42,7 +33,8 @@ fn dispatch(args: &[String]) -> anyhow::Result<()> {
     anyhow::ensure!(!name.is_empty(), "{USAGE}");
     match command.as_str() {
         "add-account" => add(provider, name),
-        _ => remove(provider, name),
+        "remove-account" => remove(provider, name),
+        _ => bail!("{USAGE}"),
     }
 }
 

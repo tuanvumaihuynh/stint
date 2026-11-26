@@ -1,0 +1,15 @@
+[package]
+name = "stint-dev"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+jiff.workspace = true
+stint-core.workspace = true
+stint-providers.workspace = true
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gpui_kit::{Context, Task};
-use jiff::{SignedDuration, Timestamp};
+use jiff::Timestamp;
 use stint_core::{ProviderId, QuotaStore, QuotaWindow, SqliteStore};
 
 use crate::mock;
@@ -11,7 +11,10 @@ use crate::mock;
 pub(crate) enum FetchError {
     NotSignedIn,
     SessionExpired,
-    RateLimited { retry_after: Option<SignedDuration> },
+    /// The provider asked to wait; `retry_at` is when that wait ends, if it said.
+    RateLimited {
+        retry_at: Option<Timestamp>,
+    },
     Offline,
 }
 

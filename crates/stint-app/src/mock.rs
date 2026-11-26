@@ -88,7 +88,8 @@ fn default(now: Timestamp) -> Vec<AccountQuota> {
             vec![window(now, WindowKind::FiveHour, 92.0, 40)],
             Some(now - SignedDuration::from_mins(6)),
             Some(FetchError::RateLimited {
-                retry_after: Some(SignedDuration::from_mins(4)),
+                // 30 seconds of slack keep "4m" on screen while a snapshot is taken.
+                retry_at: Some(now + SignedDuration::from_secs(4 * 60 + 30)),
             }),
         ),
         account(

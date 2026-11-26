@@ -195,10 +195,12 @@ fn subtitle(account: &AccountQuota, offline: bool, now: Timestamp) -> String {
         Some(FetchError::Offline) => format!("Can't reach {name} · retrying on refresh"),
         Some(FetchError::SessionExpired) => "Session expired — sign in again".to_owned(),
         Some(FetchError::NotSignedIn) => "Not signed in".to_owned(),
-        Some(FetchError::RateLimited {
-            retry_after: Some(wait),
-        }) => format!("Rate limited · retry in {}", format::duration(*wait)),
-        Some(FetchError::RateLimited { retry_after: None }) => "Rate limited".to_owned(),
+        // The wait counts down from the deadline, so a menu opened later shows what is left.
+        Some(FetchError::RateLimited { retry_at: Some(at) }) if *at > now => format!(
+            "Rate limited · retry in {}",
+            format::duration(at.duration_since(now))
+        ),
+        Some(FetchError::RateLimited { .. }) => "Rate limited".to_owned(),
     }
 }
 
@@ -272,6 +274,7 @@ pub(crate) fn provider_name(provider: ProviderId) -> &'static str {
 mod tests {
     use super::*;
     use crate::mock;
+    use jiff::SignedDuration;
 
     fn now() -> Timestamp {
         "2026-11-25T13:00:00Z".parse().unwrap()
@@ -350,6 +353,20 @@ mod tests {
         assert!(rows.contains(&Entry::Section("Claude")));
         assert!(rows.contains(&Entry::Section("Codex")));
         assert_eq!(refresh_of(&rows), (Some("Updated 2m ago".to_owned()), true));
+    }
+
+    #[test]
+    fn rate_limit_wait_counts_down() {
+        let later = now() + SignedDuration::from_mins(3);
+        let pairs = accounts(&entries(&data("default"), later));
+        assert!(pairs.contains(&(
+            "Work · Team".to_owned(),
+            "Rate limited · retry in 1m".to_owned()
+        )));
+
+        let after = now() + SignedDuration::from_mins(10);
+        let pairs = accounts(&entries(&data("default"), after));
+        assert!(pairs.contains(&("Work · Team".to_owned(), "Rate limited".to_owned())));
     }
 
     #[test]

@@ -36,12 +36,21 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let opening = window?.isVisible == false
         // A menu bar app shows in the Dock and the app switcher only while its window is open.
         NSApp.setActivationPolicy(.regular)
-        showWindow(nil)
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
-        if opening {
-            // The search field would otherwise take focus and show its ring on every open.
-            DispatchQueue.main.async { [weak self] in self?.window?.makeFirstResponder(nil) }
+        // Runs after the status menu has closed: activating while it is still tracking, or in
+        // the same turn as the policy change, leaves the window behind other apps.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window else { return }
+            showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+            if opening {
+                // SwiftUI focuses the search field once the window shows, which draws its
+                // ring on every open; clear it after that.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    window.makeFirstResponder(nil)
+                }
+            }
         }
     }
 

@@ -10,8 +10,11 @@ struct SettingsView: View {
         NavigationSplitView {
             Sidebar(core: core, model: model, query: query)
                 .navigationSplitViewColumnWidth(214)
+                .background(Color.sidebarBackground.ignoresSafeArea())
         } detail: {
             detail
+                .scrollContentBackground(.hidden)
+                .background(Color.paneBackground.ignoresSafeArea())
                 .navigationTitle(model.pane.title)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
@@ -127,7 +130,7 @@ private struct SidebarRow: View {
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.primary.opacity(0.09))
+                        .fill(Color.sidebarSelection)
                 }
             }
             .contentShape(Rectangle())

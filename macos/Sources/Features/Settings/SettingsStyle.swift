@@ -145,3 +145,18 @@ extension Severity {
 
 // Rows are told apart by their account's id.
 extension AccountRow: Identifiable {}
+
+extension Color {
+    // Tones of the window, light and dark: a white sidebar over a light gray pane, as in
+    // other native settings windows.
+    static let sidebarBackground = adaptive(light: 1, dark: 0.16)
+    static let sidebarSelection = adaptive(light: 0.96, dark: 0.24)
+    static let paneBackground = adaptive(light: 0.98, dark: 0.12)
+
+    private static func adaptive(light: CGFloat, dark: CGFloat) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return NSColor(white: isDark ? dark : light, alpha: 1)
+        })
+    }
+}

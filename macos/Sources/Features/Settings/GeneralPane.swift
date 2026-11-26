@@ -13,10 +13,10 @@ struct GeneralPane: View {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
-                        .frame(width: 46, height: 46)
+                        .frame(width: 32, height: 32)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Stint \(Self.version)").font(.system(size: 13, weight: .semibold))
-                        Text(status).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                        Text("Stint \(Self.version)").font(.body.weight(.semibold))
+                        Text(status).font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, 4)

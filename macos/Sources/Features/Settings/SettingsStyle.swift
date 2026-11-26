@@ -4,18 +4,18 @@ import SwiftUI
 struct IconTile: View {
     let symbol: String
     let colors: TileColors
-    var size: CGFloat = 22
+    var size: CGFloat = 20
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let (top, bottom) = colorScheme == .dark ? colors.dark : colors.light
-        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
+        RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
             .fill(LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom))
             .frame(width: size, height: size)
             .overlay {
                 Image(systemName: symbol)
-                    .font(.system(size: size * 0.52, weight: .semibold))
+                    .font(.system(size: size * 0.55, weight: .medium))
                     .foregroundStyle(.white)
             }
     }
@@ -29,9 +29,6 @@ struct TileColors {
     static let general = TileColors(hex: (0x9C9CA4, 0x787880), dark: (0x8F8F98, 0x696972))
     static let accounts = TileColors(hex: (0x7472EE, 0x5654D6), dark: (0x7D7BF6, 0x5E5CE6))
     static let menuBar = TileColors(hex: (0x3EC4F6, 0x1296D2), dark: (0x52CEF9, 0x1FA2DE))
-    static let claude = TileColors(hex: (0xE2805F, 0xC85F3D), dark: (0xE58665, 0xCA6341))
-    static let codex = TileColors(hex: (0x323742, 0x191C22), dark: (0x444956, 0x2B2F39))
-    static let gemini = TileColors(hex: (0x6E8BFF, 0x4E67E6), dark: (0x7B96FF, 0x5872F0))
 
     private init(hex light: (Int, Int), dark: (Int, Int)) {
         self.light = (Color(hex: light.0), Color(hex: light.1))
@@ -68,19 +65,12 @@ extension Provider {
         }
     }
 
-    var symbol: String {
+    /// The provider's mark in the asset catalog.
+    var logo: String {
         switch self {
-        case .claude: "asterisk"
-        case .codex: "hexagon"
-        case .gemini: "sparkle"
-        }
-    }
-
-    var tile: TileColors {
-        switch self {
-        case .claude: .claude
-        case .codex: .codex
-        case .gemini: .gemini
+        case .claude: "ProviderClaude"
+        case .codex: "ProviderCodex"
+        case .gemini: "ProviderGemini"
         }
     }
 
@@ -92,13 +82,51 @@ extension Provider {
     static let all: [Provider] = [.claude, .codex, .gemini]
 }
 
+/// A provider's own mark on a rounded tile, as its app icon shows it.
+struct ProviderLogo: View {
+    let provider: Provider
+    var size: CGFloat = 28
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+        ZStack {
+            switch provider {
+            case .claude:
+                shape.fill(Color(hex: 0xD97757))
+                mark.foregroundStyle(.white)
+            case .codex:
+                shape.fill(Color(hex: 0x0D0D0D))
+                mark.foregroundStyle(.white)
+            case .gemini:
+                shape.fill(.white)
+                shape.strokeBorder(.black.opacity(0.1), lineWidth: 0.5)
+                mark.foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: 0x4796E3), Color(hex: 0x9177C7), Color(hex: 0xCA6673)],
+                        startPoint: .bottomLeading,
+                        endPoint: .topTrailing
+                    )
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var mark: some View {
+        Image(provider.logo)
+            .resizable()
+            .scaledToFit()
+            .padding(size * 0.2)
+    }
+}
+
 /// A small gray capsule, such as a plan name.
 struct Badge: View {
     let text: String
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .font(.subheadline.weight(.medium))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 1.5)
@@ -114,3 +142,6 @@ extension Severity {
         }
     }
 }
+
+// Rows are told apart by their account's id.
+extension AccountRow: Identifiable {}

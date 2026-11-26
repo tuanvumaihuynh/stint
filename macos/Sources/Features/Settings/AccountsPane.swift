@@ -5,7 +5,6 @@ struct AccountsPane: View {
     let core: CoreClient
     @Bindable var model: SettingsModel
     @State private var renaming: AccountRow?
-    @State private var newName = ""
     @State private var error: String?
 
     var body: some View {
@@ -23,10 +22,7 @@ struct AccountsPane: View {
                                     AccountRowView(
                                         account: account,
                                         signInAgain: { signInAgain(account) },
-                                        rename: {
-                                            newName = account.name
-                                            renaming = account
-                                        },
+                                        rename: { renaming = account },
                                         remove: { model.removing = account }
                                     )
                                 }
@@ -35,7 +31,7 @@ struct AccountsPane: View {
                     }
                     Section {} footer: {
                         Text(overview.footer)
-                            .font(.system(size: 11))
+                            .font(.subheadline)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -51,17 +47,9 @@ struct AccountsPane: View {
                     .buttonStyle(.borderedProminent)
             }
         }
-        .alert("Rename Account", isPresented: shown($renaming)) {
-            TextField("Nickname", text: $newName)
-            Button("Rename") {
-                if let account = renaming {
-                    run { try core.rename(account.id, to: newName) }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            if let account = renaming {
-                Text("Choose a new nickname for this \(account.provider.title) account.")
+        .sheet(item: $renaming) { account in
+            RenameSheet(account: account) { name in
+                try core.rename(account.id, to: name)
             }
         }
         .alert(removalTitle, isPresented: shown($model.removing)) {
@@ -123,13 +111,13 @@ struct AccountRowView: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 7) {
-                    Text(account.name).font(.system(size: 13, weight: .semibold))
+                    Text(account.name).font(.body.weight(.semibold))
                     if let plan = account.plan {
                         Badge(text: plan)
                     }
                     if let email = account.email {
                         Text(email)
-                            .font(.system(size: 11.5))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -147,7 +135,7 @@ struct AccountRowView: View {
                 .frame(minHeight: 22)
                 if let updated = account.updated {
                     Text(updated)
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -160,15 +148,15 @@ struct AccountRowView: View {
         if let issue = account.issue {
             HStack(spacing: 5) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundStyle(issue.severity.color)
                 (Text(issue.title).fontWeight(.medium).foregroundStyle(issue.severity.color)
                     + Text(" — \(issue.detail)").foregroundStyle(.secondary))
-                    .font(.system(size: 12))
+                    .font(.callout)
             }
         } else {
             Text(account.readings)
-                .font(.system(size: 12))
+                .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
@@ -185,7 +173,7 @@ struct AccountRowView: View {
         } else {
             HStack(spacing: 5) {
                 Circle().fill(.green).frame(width: 6.5, height: 6.5)
-                Text("OK").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                Text("OK").font(.subheadline).foregroundStyle(.secondary)
             }
         }
     }
@@ -226,9 +214,62 @@ private struct EmptyAccounts: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             Label("Sessions stay in your macOS Keychain", systemImage: "lock")
-                .font(.system(size: 11.5))
+                .font(.subheadline)
                 .foregroundStyle(.tertiary)
                 .padding(.top, 8)
+        }
+    }
+}
+
+/// Gives an account a new nickname, starting from its current one.
+private struct RenameSheet: View {
+    let account: AccountRow
+    let rename: (String) throws -> Void
+    @State private var name: String
+    @State private var error: String?
+    @FocusState private var focused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    init(account: AccountRow, rename: @escaping (String) throws -> Void) {
+        self.account = account
+        self.rename = rename
+        _name = State(initialValue: account.name)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Rename Account").font(.headline)
+            Text("Choose a new nickname for this \(account.provider.title) account.")
+                .foregroundStyle(.secondary)
+            TextField("Nickname", text: $name)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit(save)
+            if let error {
+                Text(error).font(.subheadline).foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Rename", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || name == account.name)
+            }
+            .padding(.top, 4)
+        }
+        .padding(20)
+        .frame(width: 320)
+        .onAppear { focused = true }
+    }
+
+    private func save() {
+        do {
+            try rename(name)
+            dismiss()
+        } catch {
+            self.error = userMessage(error)
         }
     }
 }

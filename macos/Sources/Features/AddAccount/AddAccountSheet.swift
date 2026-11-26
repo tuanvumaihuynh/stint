@@ -25,15 +25,15 @@ struct AddAccountSheet: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(flow.title)
-                .font(.system(size: 14.5, weight: .semibold))
+                .font(.headline)
             Spacer()
             if case .failed = flow.step {
                 Text("Error")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.orange)
             } else {
                 Text("Step \(flow.step.number) of 4")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -67,22 +67,19 @@ struct AddAccountSheet: View {
                 Button("Back", action: flow.goBack)
                 Spacer()
                 Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
-                Button(action: flow.signIn) {
-                    Label("Sign In", systemImage: "arrow.up.forward.square")
-                        .labelStyle(TrailingIconLabelStyle())
-                }
-                .keyboardShortcut(.defaultAction)
+                Button("Sign In", action: flow.signIn)
+                    .keyboardShortcut(.defaultAction)
                 .disabled(flow.nickname.trimmingCharacters(in: .whitespaces).isEmpty)
             case .waiting:
                 Text("Account: \(flow.nickname) (\(flow.provider.title))")
-                    .font(.system(size: 12.5))
+                    .font(.body)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
             case .connected:
                 if flow.account == nil {
                     Text("Added to menu bar by default")
-                        .font(.system(size: 12.5))
+                        .font(.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -108,18 +105,20 @@ private struct ProviderStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose a subscription provider to connect to Stint.")
-                .font(.system(size: 12.5))
+                .font(.body)
                 .foregroundStyle(.secondary)
-            VStack(spacing: 0) {
-                ForEach(Array(Provider.all.enumerated()), id: \.element) { index, provider in
-                    if index > 0 {
-                        Divider().padding(.horizontal, 14)
-                    }
-                    ProviderChoice(provider: provider, selected: flow.provider == provider) {
-                        flow.provider = provider
-                    }
+            Picker("Provider", selection: $flow.provider) {
+                ForEach(Provider.all, id: \.self) { provider in
+                    ProviderChoice(provider: provider)
+                        .tag(provider)
+                        .selectionDisabled(!provider.available)
                 }
             }
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .groupBox()
         }
     }
@@ -127,43 +126,27 @@ private struct ProviderStep: View {
 
 private struct ProviderChoice: View {
     let provider: Provider
-    let selected: Bool
-    let choose: () -> Void
 
     var body: some View {
-        Button(action: choose) {
-            HStack(spacing: 12) {
-                IconTile(symbol: provider.symbol, colors: provider.tile, size: 30)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(provider.title).font(.system(size: 13, weight: .semibold))
-                    Text(provider.subscription)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            ProviderLogo(provider: provider, size: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(provider.title).font(.body.weight(.medium))
+                    if !provider.available {
+                        Text("Coming later")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Spacer()
-                if provider.available {
-                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
-                } else {
-                    Badge(text: "Coming later")
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!provider.available)
-        .opacity(provider.available ? 1 : 0.48)
-        .background {
-            if selected {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(.tint, lineWidth: 2)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .padding(3)
+                Text(provider.subscription)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, 5)
+        .padding(.leading, 4)
+        .opacity(provider.available ? 1 : 0.5)
     }
 }
 
@@ -177,14 +160,14 @@ private struct NicknameStep: View {
                 "Give this account a short nickname to tell it apart in the menu bar. "
                     + "Clicking Sign In opens \(flow.provider.title) in your default browser."
             )
-            .font(.system(size: 12.5))
+            .font(.body)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 0) {
                 HStack {
                     Text("Provider").foregroundStyle(.secondary).frame(width: 80, alignment: .leading)
-                    IconTile(symbol: flow.provider.symbol, colors: flow.provider.tile, size: 18)
+                    ProviderLogo(provider: flow.provider, size: 18)
                     Text(flow.provider.title).fontWeight(.semibold)
                     Spacer()
                 }
@@ -201,17 +184,17 @@ private struct NicknameStep: View {
                 }
                 .padding(.vertical, 8)
             }
-            .font(.system(size: 13))
+            .font(.body)
             .padding(.horizontal, 12)
             .groupBox()
 
             if let error = flow.nicknameError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11.5))
+                    .font(.subheadline)
                     .foregroundStyle(.red)
             } else {
                 Label("Stint stores this account's credentials in your macOS Keychain.", systemImage: "lock")
-                    .font(.system(size: 11.5))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
@@ -226,21 +209,16 @@ private struct WaitingStep: View {
         VStack(spacing: 10) {
             ProgressView().controlSize(.regular).padding(.top, 8)
             Text("Waiting for browser sign-in…")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.headline)
             (Text("Finish signing in to \(flow.provider.title) for ")
                 + Text(flow.nickname).fontWeight(.semibold).foregroundStyle(.primary)
                 + Text(" in your browser. Stint will detect it automatically."))
-                .font(.system(size: 12.5))
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Button(action: flow.openLinkAgain) {
-                Label("Open the sign-in page again", systemImage: "arrow.up.forward.square")
-                    .labelStyle(TrailingIconLabelStyle())
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .disabled(flow.link == nil)
+            Button("Open the Sign-In Page Again", action: flow.openLinkAgain)
+                .disabled(flow.link == nil)
             .padding(.bottom, 4)
 
             if flow.provider == .claude {
@@ -258,9 +236,9 @@ private struct PasteCodeBox: View {
         VStack(alignment: .leading, spacing: 6) {
             (Text("Didn't return automatically? ").fontWeight(.semibold)
                 + Text("(Claude only)").foregroundStyle(.tertiary))
-                .font(.system(size: 12.5))
+                .font(.body)
             Text(flow.codeSent ? "Code sent. Waiting for Claude to confirm…" : "Paste the authorization code shown in the browser.")
-                .font(.system(size: 11.5))
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack {
                 TextField("Code", text: $flow.code, prompt: Text("Paste code here…"))
@@ -273,7 +251,7 @@ private struct PasteCodeBox: View {
                     .disabled(flow.code.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             if let error = flow.codeError {
-                Text(error).font(.system(size: 11.5)).foregroundStyle(.red)
+                Text(error).font(.subheadline).foregroundStyle(.red)
             }
         }
         .padding(12)
@@ -295,9 +273,9 @@ private struct ConnectedStep: View {
                 .foregroundStyle(.white, .green)
                 .padding(.top, 8)
             Text("\(flow.provider.title) account ready")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.headline)
             Text("Stint verified your session and will start tracking quota limits.")
-                .font(.system(size: 12.5))
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             VStack(spacing: 0) {
@@ -311,7 +289,7 @@ private struct ConnectedStep: View {
                     detail("Plan") { Badge(text: plan) }
                 }
             }
-            .font(.system(size: 13))
+            .font(.body)
             .padding(.horizontal, 12)
             .groupBox()
             .padding(.top, 4)
@@ -342,7 +320,7 @@ private struct FailedStep: View {
                 .background(.orange.opacity(0.16), in: Circle())
                 .padding(.top, 8)
             Text("Couldn't finish signing in")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.headline)
             Group {
                 if flow.account == nil {
                     Text("\(message) Your nickname (")
@@ -352,22 +330,12 @@ private struct FailedStep: View {
                     Text(message)
                 }
             }
-            .font(.system(size: 12.5))
+            .font(.body)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-    }
-}
-
-/// Puts a label's icon after its title, as on "Sign In ↗".
-private struct TrailingIconLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
-            configuration.title
-            configuration.icon
-        }
     }
 }
 

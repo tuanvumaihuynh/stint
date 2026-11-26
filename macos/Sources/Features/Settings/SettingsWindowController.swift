@@ -33,6 +33,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     /// Brings the window forward on `pane`.
     func show(_ pane: Pane) {
         model.show(pane)
+        // A menu bar app shows in the Dock and the app switcher only while its window is open.
+        NSApp.setActivationPolicy(.regular)
         showWindow(nil)
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
@@ -50,5 +52,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // A sign-in has no window left to report to.
         model.signIn?.cancel()
         model.signIn = nil
+        NSApp.setActivationPolicy(.accessory)
     }
 }

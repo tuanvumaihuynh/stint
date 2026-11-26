@@ -57,7 +57,8 @@ private struct Sidebar: View {
     var body: some View {
         List {
             AppHeader(summary: core.overview.accounts.isEmpty ? "No accounts yet" : core.overview.summary)
-                .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 10, trailing: 6))
+                .padding(.horizontal, SidebarRow.inset)
+                .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 10, trailing: 0))
                 .listRowSeparator(.hidden)
             ForEach(Pane.allCases.filter { $0.matches(query) }) { pane in
                 SidebarRow(
@@ -83,11 +84,13 @@ private struct AppHeader: View {
         HStack(spacing: 8) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
-                .frame(width: 31, height: 31)
+                .frame(width: 28, height: 28)
+                // App icons carry transparent margins; this lines the artwork up with the tiles.
+                .padding(.leading, -2)
             VStack(alignment: .leading, spacing: 0) {
-                Text("Stint").font(.system(size: 13, weight: .semibold))
+                Text("Stint").font(.body.weight(.semibold))
                 Text(summary)
-                    .font(.system(size: 10.5))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -97,6 +100,9 @@ private struct AppHeader: View {
 
 /// A sidebar row. The selected one gets a neutral gray highlight, as in System Settings.
 private struct SidebarRow: View {
+    /// Space between the sidebar edge and the row's tile.
+    static let inset: CGFloat = 8
+
     let pane: Pane
     let selected: Bool
     let badge: String?
@@ -104,22 +110,22 @@ private struct SidebarRow: View {
 
     var body: some View {
         Button(action: select) {
-            HStack(spacing: 9) {
+            HStack(spacing: 8) {
                 IconTile(symbol: pane.symbol, colors: pane.tile)
                 Text(pane.title)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .font(.system(size: 13, weight: selected ? .medium : .regular))
                     .foregroundStyle(.primary)
                 Spacer()
                 if let badge {
-                    Text(badge).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(badge).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 8)
-            .frame(height: 32)
+            .padding(.horizontal, Self.inset)
+            .frame(height: 30)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(.primary.opacity(0.07))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.primary.opacity(0.08))
                 }
             }
             .contentShape(Rectangle())

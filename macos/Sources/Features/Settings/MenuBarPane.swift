@@ -10,7 +10,7 @@ struct MenuBarPane: View {
         Form {
             Section {} header: {
                 Text("Choose which accounts appear in the menu bar menu. Hidden accounts continue updating in this window.")
-                    .font(.system(size: 12.5, weight: .regular))
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .textCase(nil)
                     .fixedSize(horizontal: false, vertical: true)
@@ -44,7 +44,7 @@ struct MenuBarPane: View {
                         Spacer()
                         Text("Order follows provider groups")
                     }
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundStyle(.tertiary)
                 }
             }
@@ -68,15 +68,15 @@ private struct MenuBarRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     (Text(account.name).fontWeight(.semibold)
                         + Text(account.plan.map { " · \($0)" } ?? "").foregroundStyle(.secondary))
-                        .font(.system(size: 13))
-                    subtitle.font(.system(size: 11.5))
+                        .font(.body)
+                    subtitle.font(.subheadline)
                 }
                 .padding(.leading, 4)
             }
             .toggleStyle(.checkbox)
             Spacer()
             Text(account.shownInMenu ? "Shown" : "Hidden")
-                .font(.system(size: 11.5))
+                .font(.subheadline)
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)

@@ -34,6 +34,7 @@ app-test:
 # Photograph the status menu in every mock scenario, light and dark (macOS only)
 app-snapshot dir="target/snapshots": app-build
     macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint --snapshot "$(cd {{justfile_directory()}} && mkdir -p {{dir}} && cd {{dir}} && pwd)"
+    macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint --window-snapshot "$(cd {{justfile_directory()}} && mkdir -p {{dir}} && cd {{dir}} && pwd)"
 
 # Audit dependencies against the RustSec advisory database
 vuln:

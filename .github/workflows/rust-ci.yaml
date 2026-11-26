@@ -59,6 +59,24 @@ jobs:
           tool: just
       - run: just app-test
 
+  release-build:
+    name: Release build (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          target: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      # Packs the universal app and launches it from the disk image, as a release would.
+      - run: just release 0.0.0
+      - run: just smoke-test 0.0.0
+
   vuln:
     name: Vulnerability Check
     runs-on: ubuntu-latest

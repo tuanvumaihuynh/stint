@@ -43,19 +43,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let launchCheck = CommandLine.arguments.contains("--launch-check")
         let core: CoreClient
         do {
             core = try CoreClient(mock: Self.mockScenario())
         } catch {
             NSLog("stint: %@", String(describing: error))
+            if launchCheck { exit(1) }
             NSApp.terminate(nil)
             return
+        }
+        if launchCheck {
+            Self.reportLaunch(core.menu())
+            exit(0)
         }
         let statusMenu = StatusMenuController(menu: { core.menu() }, perform: { [weak self] in self?.perform($0) })
         core.onChange = { statusMenu.update() }
         statusMenu.update()
         self.core = core
         self.statusMenu = statusMenu
+    }
+
+    /// `--launch-check`, for release smoke tests: the database opened and migrated, so print
+    /// the menu's status line and quit without showing anything.
+    private static func reportLaunch(_ menu: Menu) {
+        for case .header(let status, _) in menu.entries {
+            print("launch check: \(status)")
+        }
     }
 
     private func perform(_ command: Command) {

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Builds the Rust core as a static library and writes its Swift bindings into
 # macos/Generated/, where the Xcode project expects them. Run it before building in Xcode:
-# `just mac-ffi` (debug) or `just mac-ffi release`.
+# `just ffi` (debug), `just ffi release`, or `just ffi universal` (release, for Apple
+# silicon and Intel Macs, as shipped).
 set -eu
 
 profile=${1:-debug}
@@ -9,10 +10,9 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 out="$root/macos/Generated"
 
 case "$profile" in
-debug) cargo_profile="" ;;
-release) cargo_profile="--release" ;;
+debug | release | universal) ;;
 *)
-    echo "usage: $0 [debug|release]" >&2
+    echo "usage: $0 [debug|release|universal]" >&2
     exit 2
     ;;
 esac
@@ -20,9 +20,30 @@ esac
 cd "$root"
 # Match the app's deployment target, or the linker warns about every object file.
 export MACOSX_DEPLOYMENT_TARGET=15.0
-# shellcheck disable=SC2086 # an empty profile flag must vanish
-cargo build --locked -p stint-ffi $cargo_profile
-lib="$root/target/$profile/libstint_ffi.a"
+case "$profile" in
+debug)
+    cargo build --locked -p stint-ffi
+    lib="$root/target/debug/libstint_ffi.a"
+    ;;
+release)
+    cargo build --locked -p stint-ffi --release
+    lib="$root/target/release/libstint_ffi.a"
+    ;;
+universal)
+    targets="aarch64-apple-darwin x86_64-apple-darwin"
+    # shellcheck disable=SC2086 # one word per target
+    rustup target add $targets >/dev/null
+    slices=""
+    for target in $targets; do
+        cargo build --locked -p stint-ffi --release --target "$target"
+        slices="$slices $root/target/$target/release/libstint_ffi.a"
+    done
+    lib="$root/target/universal/release/libstint_ffi.a"
+    mkdir -p "$(dirname "$lib")"
+    # shellcheck disable=SC2086 # one word per slice
+    lipo -create $slices -output "$lib"
+    ;;
+esac
 
 bindgen() {
     cargo run --quiet --locked -p stint-ffi --features bindgen --bin stint-bindgen -- "$@"

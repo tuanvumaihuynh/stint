@@ -57,6 +57,8 @@ just check
 
 On macOS, `just app-test` runs the app's unit tests, and `just app-snapshot` photographs the menu and the window in every mock scenario, in light and dark mode, into `target/snapshots/`.
 
+`just release 0.1.0` builds what ships: one universal app for Apple silicon and Intel Macs, ad-hoc signed, as `Stint-0.1.0.zip` and `Stint-0.1.0.dmg` in `target/dist/`. The build number is the branch's commit count. `just smoke-test 0.1.0` then launches the app from the disk image against a database from an older release, on every architecture the Mac can run, and checks that it opens and migrates.
+
 The macOS app lives in `macos/`, an Xcode project. Its Swift code calls the Rust core through `crates/stint-ffi`, whose static library and generated Swift bindings `just ffi` writes to `macos/Generated/`. Run `just ffi` once before building in Xcode.
 
 Workspace crates live under `crates/`:
@@ -65,3 +67,7 @@ Workspace crates live under `crates/`:
 - `crates/stint-providers`: Account sign-in (through the provider CLIs, or the browser for Antigravity), Keychain logins with renewal, and quota clients for Claude, Codex, and Antigravity.
 - `crates/stint-ffi`: The core as the macOS app sees it, exported to Swift with UniFFI.
 - `crates/stint-dev`: The `add-account`, `remove-account`, and `usage` development commands.
+
+## License
+
+Stint is licensed under the [Apache License 2.0](LICENSE).

@@ -87,11 +87,7 @@ private struct AppHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 34, height: 34)
-                // App icons carry transparent margins; this lines the artwork up with the tiles.
-                .padding(.horizontal, -3)
+            AppLogo(size: 28)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Stint").font(.body.weight(.semibold))
                 Text(summary)

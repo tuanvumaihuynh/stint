@@ -1,5 +1,6 @@
 #if DEBUG
     import AppKit
+    import ServiceManagement
 
     /// Photographs the desktop window in every pane and Add Account step, in light and dark
     /// mode, for design review: `Stint --window-snapshot <dir>` (debug builds only).
@@ -78,11 +79,22 @@
 
         private func photographAll() async throws {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            // The windows never take the keyboard, but a stray click could still flip Launch at
+            // login, which is a real system setting; it is put back afterwards.
+            let loginItem = SMAppService.mainApp.status
+            print("launch at login: \(loginItem.rawValue) (0 not registered, 1 enabled, 2 needs approval, 3 not found)")
+            defer {
+                let after = SMAppService.mainApp.status
+                if after == .enabled, loginItem != .enabled {
+                    try? SMAppService.mainApp.unregister()
+                    print("launch at login was switched on during the snapshots; switched it back off")
+                }
+            }
             for (name, mode) in [(NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")] {
                 NSApp.appearance = NSAppearance(named: name)
                 for shot in shots {
                     let (window, core) = try controller(for: shot.scenario)
-                    window.show(shot.pane)
+                    window.present(shot.pane)
                     if let shown = window.window {
                         shown.setContentSize(SettingsWindowController.size)
                         try await place(shown)

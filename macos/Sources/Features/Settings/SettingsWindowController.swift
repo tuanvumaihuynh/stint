@@ -54,6 +54,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    #if DEBUG
+        /// Shows the window on `pane` without activating Stint, so snapshots never take the
+        /// keyboard from the app the user is typing in.
+        func present(_ pane: Pane) {
+            model.show(pane)
+            window?.orderFrontRegardless()
+        }
+    #endif
+
     /// Opens the Accounts pane with the Add Account sheet, unless a sign-in is running.
     func addAccount() {
         show(.accounts)

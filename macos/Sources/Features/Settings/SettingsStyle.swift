@@ -160,3 +160,16 @@ extension Color {
         })
     }
 }
+
+/// Stint's icon without the app icon's transparent margin, drawn sharp at small sizes.
+struct AppLogo: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image("AppLogo")
+            .resizable()
+            .interpolation(.high)
+            .antialiased(true)
+            .frame(width: size, height: size)
+    }
+}

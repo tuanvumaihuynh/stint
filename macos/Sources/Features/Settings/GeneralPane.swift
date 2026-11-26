@@ -11,9 +11,7 @@ struct GeneralPane: View {
         Form {
             Section {
                 HStack(spacing: 14) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 32, height: 32)
+                    AppLogo(size: 30)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Stint \(Self.version)").font(.body.weight(.semibold))
                         Text(status).font(.subheadline).foregroundStyle(.secondary)

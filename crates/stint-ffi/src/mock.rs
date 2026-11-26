@@ -2,7 +2,7 @@
 //! Run the app with `STINT_MOCK=<scenario>` in a debug build to use one.
 
 use jiff::{SignedDuration, Timestamp};
-use stint_core::{Percentage, ProviderId, QuotaWindow, WindowKind};
+use stint_core::{AccountId, Percentage, ProviderId, QuotaWindow, WindowKind};
 
 use crate::quota::{AccountQuota, FetchError};
 
@@ -26,7 +26,16 @@ pub(crate) fn scenario(name: &str, now: Timestamp) -> Option<Vec<AccountQuota>> 
         "empty" => Vec::new(),
         _ => return None,
     };
-    Some(accounts)
+    Some(
+        accounts
+            .into_iter()
+            .zip(1..)
+            .map(|(account, id)| AccountQuota {
+                id: AccountId::new(id),
+                ..account
+            })
+            .collect(),
+    )
 }
 
 /// Whether the scenario starts with a refresh in flight.
@@ -177,9 +186,13 @@ fn account(
     error: Option<FetchError>,
 ) -> AccountQuota {
     AccountQuota {
+        // Numbered in `scenario`.
+        id: AccountId::new(0),
         provider,
         name: name.to_owned(),
+        email: Some(format!("{}@example.com", name.to_lowercase())),
         plan: Some(plan.to_owned()),
+        shown_in_menu: true,
         windows,
         fetched_at,
         error,

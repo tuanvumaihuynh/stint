@@ -20,11 +20,15 @@ pub(crate) enum FetchError {
 /// One tracked account and its last known quota. A failed refresh keeps the old windows.
 #[derive(Debug, Clone)]
 pub(crate) struct AccountQuota {
+    pub(crate) id: AccountId,
     pub(crate) provider: ProviderId,
     /// The nickname given when the account was added, such as "Personal".
     pub(crate) name: String,
+    pub(crate) email: Option<String>,
     /// The subscription, such as "Max 5x", when known.
     pub(crate) plan: Option<String>,
+    /// Whether the status menu lists the account.
+    pub(crate) shown_in_menu: bool,
     pub(crate) windows: Vec<QuotaWindow>,
     pub(crate) fetched_at: Option<Timestamp>,
     pub(crate) error: Option<FetchError>,
@@ -72,6 +76,32 @@ impl QuotaState {
             source,
             errors,
         }
+    }
+
+    /// The database, unless the accounts are made up.
+    pub(crate) fn store_mut(&mut self) -> Option<&mut SqliteStore> {
+        match &mut self.source {
+            Source::Store(store) => Some(store),
+            Source::Mock(_) => None,
+        }
+    }
+
+    /// Forgets why an account last failed, once it has a new login.
+    pub(crate) fn forget_error(&mut self, id: AccountId) {
+        self.errors.remove(&id);
+    }
+
+    /// Rereads the accounts after the database changed. Made-up accounts keep their edits.
+    pub(crate) fn reload(&mut self) {
+        let Source::Store(store) = &self.source else {
+            return;
+        };
+        let ids: Vec<AccountId> = store
+            .accounts()
+            .map_or_default(|accounts| accounts.into_iter().map(|a| a.id).collect());
+        // Forget failures of removed accounts.
+        self.errors.retain(|id, _| ids.contains(id));
+        self.accounts = stored(store, &self.errors);
     }
 
     /// Marks a refresh as running and says what it has to fetch. A refresh already
@@ -196,9 +226,12 @@ fn stored(store: &SqliteStore, errors: &HashMap<AccountId, FetchError>) -> Vec<A
                 _ => (Vec::new(), None),
             };
             AccountQuota {
+                id: account.id,
                 provider: account.provider,
                 name: account.label,
+                email: account.email,
                 plan: account.plan,
+                shown_in_menu: account.shown_in_menu,
                 windows,
                 fetched_at,
                 error: errors.get(&account.id).cloned(),

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use stint_core::{AccountId, NewAccount, ProviderId, QuotaStore, StoreError};
 use stint_providers::antigravity::Authorization;
-use stint_providers::{Enrolled, ProviderError, SignIn, SignInEvent, Vault, Watched};
+use stint_providers::{CliProvider, Enrolled, ProviderError, SignIn, SignInEvent, Vault, Watched};
 
 use crate::{Stint, StintError, menu};
 
@@ -89,10 +89,10 @@ impl Stint {
             ));
         };
         let provider = self.check_target(&target)?;
-        if provider == ProviderId::Antigravity {
+        let Some(cli) = CliProvider::of(provider) else {
             return self.sign_in_in_browser(target, listener);
-        }
-        let attempt = SignIn::start(provider, data_dir)
+        };
+        let attempt = SignIn::start(cli, data_dir)
             .map_err(|err| StintError::Message(failure(&err, provider)))?;
         let stint = self.clone();
         let watched = attempt
@@ -322,12 +322,6 @@ fn failure(err: &ProviderError, provider: ProviderId) -> String {
         ProviderError::SignInExpired => "Google refused the sign-in. Try again.".to_owned(),
         ProviderError::Transport(_) | ProviderError::Status { .. } => {
             "Stint couldn't reach Google. Check your connection, then try again.".to_owned()
-        }
-        ProviderError::Unsupported(_) => {
-            format!(
-                "{} accounts are coming later.",
-                menu::provider_name(provider)
-            )
         }
         _ => "Stint couldn't save the new login. Try again.".to_owned(),
     }

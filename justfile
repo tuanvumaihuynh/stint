@@ -43,10 +43,6 @@ vuln:
 # Run all pre-PR verification checks
 check: lint test
 
-# Run the stint CLI binary
-cli *args:
-    cargo run -p stint-cli -- {{args}}
-
 # Add a real account by signing in, e.g. `just add-account claude Personal` or `just add-account antigravity Personal`
 add-account provider name:
     cargo run -p stint-dev -- add-account {{provider}} "{{name}}"

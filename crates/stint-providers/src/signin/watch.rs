@@ -215,7 +215,7 @@ mod tests {
     use std::sync::mpsc;
     use std::time::Instant;
 
-    use stint_core::ProviderId;
+    use super::super::CliProvider;
 
     use super::*;
     use crate::credential::Credential;
@@ -240,7 +240,7 @@ mod tests {
         drive: impl FnOnce(&Watched, &mpsc::Receiver<SignInEvent>) -> Vec<SignInEvent>,
     ) -> Vec<SignInEvent> {
         let data = tempfile::TempDir::new().unwrap();
-        let attempt = SignIn::start(ProviderId::Codex, data.path()).unwrap();
+        let attempt = SignIn::start(CliProvider::Codex, data.path()).unwrap();
         let mut command = Command::new("/bin/sh");
         command.args(["-c", script]).env("HOME_DIR", &attempt.home);
         let (sender, events) = mpsc::channel();

@@ -57,7 +57,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: just
-      - run: just app-check
+      - run: just app-test
 
   vuln:
     name: Vulnerability Check

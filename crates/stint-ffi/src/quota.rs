@@ -1,11 +1,7 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-
-use gpui_kit::{Context, Task};
 use jiff::Timestamp;
+use std::collections::HashMap;
 use stint_core::{AccountId, ProviderId, QuotaSnapshot, QuotaStore, QuotaWindow, SqliteStore};
-use stint_providers::{Accounts, ProviderError, Vault};
+use stint_providers::{Accounts, ProviderError};
 
 use crate::mock;
 
@@ -37,107 +33,91 @@ pub(crate) struct AccountQuota {
 /// Where the accounts come from.
 pub(crate) enum Source {
     /// Accounts added in Stint: their stored snapshots, refreshed from the providers.
-    Store {
-        store: SqliteStore,
-        /// Holds the renewal locks.
-        data_dir: PathBuf,
-    },
+    Store(SqliteStore),
     /// Made-up accounts for development, picked by scenario name.
     Mock(String),
 }
 
-/// Every tracked account, shared by the status menu and the windows.
+/// Every tracked account and whether a refresh is running.
 pub(crate) struct QuotaState {
     pub(crate) accounts: Vec<AccountQuota>,
     pub(crate) refreshing: bool,
     source: Source,
     // Why each account's last refresh failed; cleared by its next success.
     errors: HashMap<AccountId, FetchError>,
-    refresh_task: Option<Task<()>>,
 }
 
-// How long a mock refresh pretends to take, so the refreshing state can be seen.
-const MOCK_REFRESH: Duration = Duration::from_millis(1200);
+/// What a refresh has to do after [`QuotaState::begin_refresh`].
+pub(crate) enum Refresh {
+    /// One is already running.
+    Busy,
+    /// There was nothing to fetch; the accounts were reloaded.
+    Reloaded,
+    /// Pretend to fetch, then call [`QuotaState::finish_mock`].
+    Mock,
+    /// Fetch these accounts, then call [`QuotaState::apply`].
+    Fetch { jobs: Vec<(AccountId, String)> },
+}
+
+pub(crate) type FetchResult = Result<Vec<QuotaWindow>, ProviderError>;
 
 impl QuotaState {
     pub(crate) fn new(source: Source) -> Self {
         let errors = HashMap::new();
         let accounts = load(&source, &errors, Timestamp::now());
+        let refreshing = false;
         Self {
             accounts,
-            refreshing: false,
+            refreshing,
             source,
             errors,
-            refresh_task: None,
         }
     }
 
-    pub(crate) fn is_mock(&self) -> bool {
-        matches!(self.source, Source::Mock(_))
-    }
-
-    /// Fetches every account's quota. A refresh already running is not restarted.
-    pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
+    /// Marks a refresh as running and says what it has to fetch. A refresh already
+    /// running is not restarted.
+    pub(crate) fn begin_refresh(&mut self) -> Refresh {
         if self.refreshing {
-            return;
+            return Refresh::Busy;
         }
-        match &self.source {
-            Source::Store { store, data_dir } => {
-                let jobs: Vec<(AccountId, String)> = match store.accounts() {
-                    Ok(profiles) => profiles
-                        .into_iter()
-                        .map(|profile| (profile.id, profile.credential_key))
-                        .collect(),
-                    Err(err) => {
-                        eprintln!("stint: read accounts: {err}");
-                        Vec::new()
-                    }
-                };
-                if jobs.is_empty() {
-                    self.accounts = load(&self.source, &self.errors, Timestamp::now());
-                    cx.notify();
-                    return;
-                }
-                self.refreshing = true;
-                cx.notify();
-                let data_dir = data_dir.clone();
-                let fetched = cx
-                    .background_executor()
-                    .spawn(async move { fetch_all(&data_dir, jobs) });
-                self.refresh_task = Some(cx.spawn(async move |this, cx| {
-                    let results = fetched.await;
-                    this.update(cx, |state, cx| {
-                        state.apply(results, Timestamp::now());
-                        state.refreshing = false;
-                        cx.notify();
-                    })
-                    .ok();
-                }));
-            }
+        let jobs = match &self.source {
             Source::Mock(_) => {
                 self.refreshing = true;
-                cx.notify();
-                self.refresh_task = Some(cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(MOCK_REFRESH).await;
-                    this.update(cx, |state, cx| {
-                        let now = Timestamp::now();
-                        for account in &mut state.accounts {
-                            if account.error.is_none() {
-                                account.fetched_at = Some(now);
-                            }
-                        }
-                        state.refreshing = false;
-                        cx.notify();
-                    })
-                    .ok();
-                }));
+                return Refresh::Mock;
+            }
+            Source::Store(store) => match store.accounts() {
+                Ok(profiles) => profiles
+                    .into_iter()
+                    .map(|profile| (profile.id, profile.credential_key))
+                    .collect::<Vec<_>>(),
+                Err(err) => {
+                    eprintln!("stint: read accounts: {err}");
+                    return Refresh::Reloaded;
+                }
+            },
+        };
+        if jobs.is_empty() {
+            self.accounts = load(&self.source, &self.errors, Timestamp::now());
+            return Refresh::Reloaded;
+        }
+        self.refreshing = true;
+        Refresh::Fetch { jobs }
+    }
+
+    /// Ends a mock refresh: every account without an error is fresh again.
+    pub(crate) fn finish_mock(&mut self, now: Timestamp) {
+        for account in &mut self.accounts {
+            if account.error.is_none() {
+                account.fetched_at = Some(now);
             }
         }
+        self.refreshing = false;
     }
 
     /// Stores fresh numbers and remembers failures, then reloads the accounts.
-    fn apply(&mut self, results: Vec<(AccountId, FetchResult)>, now: Timestamp) {
-        let Source::Store { store, .. } = &mut self.source else {
+    pub(crate) fn apply(&mut self, results: Vec<(AccountId, FetchResult)>, now: Timestamp) {
+        self.refreshing = false;
+        let Source::Store(store) = &mut self.source else {
             return;
         };
         for (id, result) in results {
@@ -163,34 +143,16 @@ impl QuotaState {
     }
 }
 
-type FetchResult = Result<Vec<QuotaWindow>, ProviderError>;
-
-/// Fetches each account in turn. Blocks: run it on a background thread.
-fn fetch_all(data_dir: &Path, jobs: Vec<(AccountId, String)>) -> Vec<(AccountId, FetchResult)> {
-    // The HTTP client runs on Tokio; the app's executors are not Tokio's.
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build();
-    let (runtime, client) = match (runtime, stint_providers::http_client()) {
-        (Ok(runtime), Ok(client)) => (runtime, client),
-        (Err(err), _) => return failed(jobs, &err.to_string()),
-        (_, Err(err)) => return failed(jobs, &err.to_string()),
-    };
-    let accounts = Accounts::new(client, Vault::new(), data_dir);
-    runtime.block_on(async {
-        let mut results = Vec::with_capacity(jobs.len());
-        for (id, key) in jobs {
-            results.push((id, accounts.fetch(&key).await));
-        }
-        results
-    })
-}
-
-fn failed(jobs: Vec<(AccountId, String)>, reason: &str) -> Vec<(AccountId, FetchResult)> {
-    eprintln!("stint: start fetching: {reason}");
-    jobs.into_iter()
-        .map(|(id, _)| (id, Err(ProviderError::Unsupported(reason.to_owned()))))
-        .collect()
+/// Fetches each account in turn.
+pub(crate) async fn fetch_all(
+    accounts: &Accounts,
+    jobs: Vec<(AccountId, String)>,
+) -> Vec<(AccountId, FetchResult)> {
+    let mut results = Vec::with_capacity(jobs.len());
+    for (id, key) in jobs {
+        results.push((id, accounts.fetch(&key).await));
+    }
+    results
 }
 
 /// How the menu reports a failed refresh.
@@ -212,7 +174,7 @@ fn load(
     now: Timestamp,
 ) -> Vec<AccountQuota> {
     match source {
-        Source::Store { store, .. } => stored(store, errors),
+        Source::Store(store) => stored(store, errors),
         Source::Mock(scenario) => mock::scenario(scenario, now).unwrap_or_default(),
     }
 }

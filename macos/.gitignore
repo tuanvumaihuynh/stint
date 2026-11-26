@@ -1,0 +1,6 @@
+# Written by scripts/build-ffi.sh.
+/Generated/
+# Xcode
+/build/
+xcuserdata/
+*.xcuserstate

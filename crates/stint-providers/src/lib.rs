@@ -15,4 +15,4 @@ pub use accounts::Accounts;
 pub use credential::{ClaudeLogin, CodexLogin, Credential, Vault};
 pub use error::ProviderError;
 pub use http::client as http_client;
-pub use signin::{Enrolled, SignIn, new_credential_key};
+pub use signin::{Enrolled, SignIn, SignInEvent, Watched, new_credential_key};

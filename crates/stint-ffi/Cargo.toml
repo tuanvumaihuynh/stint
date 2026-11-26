@@ -1,0 +1,29 @@
+[package]
+name = "stint-ffi"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# The macOS app links the static library; `lib` lets tests and the bindgen read it.
+[lib]
+crate-type = ["staticlib", "lib"]
+
+[[bin]]
+name = "stint-bindgen"
+required-features = ["bindgen"]
+
+[features]
+# Builds `stint-bindgen`, which writes the Swift bindings: `just mac-ffi`.
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+jiff.workspace = true
+stint-core.workspace = true
+stint-providers.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
+uniffi.workspace = true
+
+[lints]
+workspace = true

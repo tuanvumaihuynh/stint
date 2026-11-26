@@ -4,18 +4,25 @@ use std::path::PathBuf;
 const DATA_DIR_ENV: &str = "STINT_DATA_DIR";
 const DATABASE_FILE: &str = "stint.db";
 
-/// The SQLite database shared by the CLI and the app:
-/// `~/Library/Application Support/Stint/stint.db`, or `$STINT_DATA_DIR/stint.db`.
+/// Where Stint keeps its files: `~/Library/Application Support/Stint`, or `$STINT_DATA_DIR`.
+pub fn data_dir() -> Option<PathBuf> {
+    resolve_dir(std::env::var_os(DATA_DIR_ENV), std::env::home_dir())
+}
+
+/// The SQLite database shared by the CLI and the app, `stint.db` in [`data_dir`].
 pub fn database_path() -> Option<PathBuf> {
     resolve(std::env::var_os(DATA_DIR_ENV), std::env::home_dir())
 }
 
+fn resolve_dir(data_dir: Option<OsString>, home: Option<PathBuf>) -> Option<PathBuf> {
+    match data_dir.filter(|dir| !dir.is_empty()) {
+        Some(dir) => Some(PathBuf::from(dir)),
+        None => Some(home?.join("Library/Application Support/Stint")),
+    }
+}
+
 fn resolve(data_dir: Option<OsString>, home: Option<PathBuf>) -> Option<PathBuf> {
-    let dir = match data_dir.filter(|dir| !dir.is_empty()) {
-        Some(dir) => PathBuf::from(dir),
-        None => home?.join("Library/Application Support/Stint"),
-    };
-    Some(dir.join(DATABASE_FILE))
+    Some(resolve_dir(data_dir, home)?.join(DATABASE_FILE))
 }
 
 #[cfg(test)]

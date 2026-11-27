@@ -285,7 +285,7 @@
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Generated/lib";
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = "-lstint_ffi";
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.tuanvumaihuynh.stint;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.vumht.stint;
 				PRODUCT_NAME = Stint;
 				SPARKLE_FEED_URL = "https://github.com/tuanvumaihuynh/stint/releases/latest/download/appcast.xml";
 				SPARKLE_PUBLIC_KEY = "";
@@ -313,7 +313,7 @@
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Generated/lib";
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = "-lstint_ffi";
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.tuanvumaihuynh.stint;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.vumht.stint;
 				PRODUCT_NAME = Stint;
 				SPARKLE_FEED_URL = "https://github.com/tuanvumaihuynh/stint/releases/latest/download/appcast.xml";
 				SPARKLE_PUBLIC_KEY = "";
@@ -327,7 +327,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.tuanvumaihuynh.stint.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.vumht.stint.tests;
 				PRODUCT_NAME = StintTests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stint.app/Contents/MacOS/Stint";
 			};
@@ -340,7 +340,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.tuanvumaihuynh.stint.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.vumht.stint.tests;
 				PRODUCT_NAME = StintTests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stint.app/Contents/MacOS/Stint";
 			};

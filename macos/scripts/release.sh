@@ -81,6 +81,11 @@ if [ "$(plist CFBundleShortVersionString)" != "$version" ] ||
     echo "the app's Info.plist does not carry version $version ($build_number)" >&2
     exit 1
 fi
+bundle_id=${STINT_BUNDLE_ID:-dev.vumht.stint}
+if [ "$(plist CFBundleIdentifier)" != "$bundle_id" ]; then
+    echo "the app's Info.plist does not carry bundle id $bundle_id" >&2
+    exit 1
+fi
 if [ "$(plist SUPublicEDKey)" != "$public_key" ]; then
     echo "the app does not carry the Sparkle public key" >&2
     exit 1

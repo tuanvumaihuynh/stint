@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Release (macOS)
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: meta
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "tag must be vMAJOR.MINOR.PATCH, got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "the SPARKLE_PRIVATE_KEY secret is not set" >&2
+            exit 1
+          fi
+          echo "tag=$GITHUB_REF_NAME" >>"$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >>"$GITHUB_OUTPUT"
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          target: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: just release "${{ steps.meta.outputs.version }}"
+      - run: just smoke-test "${{ steps.meta.outputs.version }}"
+      - run: just appcast "${{ steps.meta.outputs.version }}"
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "Stint $VERSION" --generate-notes \
+            "target/dist/Stint-$VERSION.zip" \
+            "target/dist/Stint-$VERSION.dmg" \
+            "target/dist/appcast.xml" \
+            "target/dist/SHA256SUMS"

@@ -70,3 +70,11 @@ usage provider name:
 # Run the macOS app; pass a scenario to use mock accounts, e.g. `just app default` (macOS only)
 app mock="": app-build
     STINT_MOCK={{mock}} macos/build/Build/Products/Debug/Stint.app/Contents/MacOS/Stint
+
+# Serve the landing page in web/ locally with Wrangler
+web:
+    cd web && npx -y wrangler@4.161.0 dev
+
+# Deploy the landing page in web/ to stint.vumht.dev
+web-deploy:
+    cd web && npx -y wrangler@4.161.0 deploy

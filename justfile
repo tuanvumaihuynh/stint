@@ -44,6 +44,10 @@ release version:
 smoke-test version:
     macos/scripts/smoke-test.sh target/dist/Stint-{{version}}.dmg
 
+# Sign the release zip and write target/dist/appcast.xml, e.g. `just appcast 0.1.0` (macOS only)
+appcast version:
+    macos/scripts/appcast.sh {{version}}
+
 # Audit dependencies against the RustSec advisory database
 vuln:
     cargo audit

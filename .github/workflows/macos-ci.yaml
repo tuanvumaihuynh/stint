@@ -36,7 +36,8 @@ env:
 jobs:
   app:
     name: App (macOS)
-    runs-on: macos-latest
+    # Matches the local Xcode 27 toolchain.
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -50,11 +51,14 @@ jobs:
 
   release-build:
     name: Release build (macOS)
-    runs-on: macos-latest
+    # Matches the local Xcode 27 toolchain.
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
         with:
+          # Full history, so the build number counts commits instead of being 1.
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:

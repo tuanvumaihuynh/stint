@@ -1,27 +1,22 @@
 name: macOS CI
 
-# Runs on macOS runners, so only when something the app is built from changes.
+# Runs on macOS runners, so only when something the app is built from changes. The
+# release build runs only when packaging or the database it migrates changes.
 on:
   pull_request:
     branches: [main]
-    paths:
+    paths: &app-paths
       - "crates/**"
       - "macos/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
-      - "justfile"
       - ".github/workflows/macos-ci.yaml"
+      - ".github/workflows/release.yaml"
   push:
     branches: [main]
-    paths:
-      - "crates/**"
-      - "macos/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "justfile"
-      - ".github/workflows/macos-ci.yaml"
+    paths: *app-paths
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,6 +29,34 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      packaging: ${{ steps.filter.outputs.packaging }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            packaging:
+              - "macos/scripts/**"
+              - "macos/Info.plist"
+              - "macos/Stint.xcodeproj/**"
+              - "crates/stint-core/src/store/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "rust-toolchain.toml"
+              - ".github/workflows/macos-ci.yaml"
+              - ".github/workflows/release.yaml"
+
   app:
     name: App (macOS)
     runs-on: xcode-27
@@ -50,6 +73,8 @@ jobs:
 
   release-build:
     name: Release build (macOS)
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.packaging == 'true'
     runs-on: xcode-27
     timeout-minutes: 40
     steps:

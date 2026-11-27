@@ -1,10 +1,20 @@
 name: Rust CI
 
+# Runs only when something the Rust workspace is built or checked from changes.
 on:
   pull_request:
     branches: [main]
+    paths: &rust-paths
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - ".github/workflows/rust-ci.yaml"
   push:
     branches: [main]
+    paths: *rust-paths
+  workflow_dispatch:
 
 permissions:
   contents: read

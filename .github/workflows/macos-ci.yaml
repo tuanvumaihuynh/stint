@@ -49,6 +49,7 @@ jobs:
             packaging:
               - "macos/scripts/**"
               - "macos/Info.plist"
+              - "macos/sparkle-public-key.txt"
               - "macos/Stint.xcodeproj/**"
               - "crates/stint-core/src/store/**"
               - "Cargo.toml"

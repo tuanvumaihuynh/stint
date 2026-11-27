@@ -93,6 +93,8 @@ Release builds update themselves with [Sparkle](https://sparkle-project.org). Th
 
 The macOS app lives in `macos/`, an Xcode project. Its Swift code calls the Rust core through `crates/stint-ffi`, whose static library and generated Swift bindings `just ffi` writes to `macos/Generated/`. Run `just ffi` once before building in Xcode.
 
+The landing page at [stint.vumht.dev](https://stint.vumht.dev) is a static page in `web/`, served by a Cloudflare Worker. `just web` serves it locally, and pushes to `main` that change `web/` deploy it.
+
 Workspace crates live under `crates/`:
 
 - `crates/stint-core`: Domain types, SQLite WAL storage, and pace calculations.

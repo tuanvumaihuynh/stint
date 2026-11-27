@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Stint · AI usage limits in your menu bar</title>
+  <meta name="description" content="A small macOS menu bar app that shows how much of your Claude, Codex, and Antigravity usage limits you have used.">
+  <link rel="icon" href="/assets/mark-color.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/app-icon-dark.png">
+  <meta property="og:title" content="Stint">
+  <meta property="og:description" content="AI usage limits in your macOS menu bar.">
+  <meta property="og:image" content="https://stint.vumht.dev/assets/og-icon.png">
+  <meta property="og:url" content="https://stint.vumht.dev/">
+  <meta name="twitter:card" content="summary">
+  <style>
+    :root {
+      --bg: #F6F7FA;
+      --surface: #EAEFF5;
+      --surface-strong: #DFE6EF;
+      --ink: #101217;
+      --ink-secondary: #4C5568;
+      --accent: #00A870;
+      --accent-hover: #009260;
+      --accent-ink: #FFFFFF;
+      --focus: #00A870;
+      --window-shadow: drop-shadow(0 18px 34px rgba(16, 18, 23, 0.14)) drop-shadow(0 2px 6px rgba(16, 18, 23, 0.08)); /* taste-skill-ignore */
+      --icon-shadow: drop-shadow(0 10px 22px rgba(16, 18, 23, 0.14)); /* taste-skill-ignore */
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+      --max-w: 1060px;
+      --gutter: 28px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101217;
+        --surface: #171A23;
+        --surface-strong: #212633;
+        --ink: #F2F4F8;
+        --ink-secondary: #9BA4B7;
+        --accent: #00B87C;
+        --accent-hover: #10CE8F;
+        --accent-ink: #071912;
+        --focus: #00B87C;
+        --window-shadow: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.56)) drop-shadow(0 3px 10px rgba(0, 0, 0, 0.35)); /* taste-skill-ignore */
+        --icon-shadow: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.5)); /* taste-skill-ignore */
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-feature-settings: "cv11" 1, "ss01" 1;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    img, picture, svg {
+      display: block;
+      max-width: 100%;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: calc(var(--max-w) + var(--gutter) * 2);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-block: 24px;
+    }
+
+    .brand-link {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .brand-wordmark {
+      height: 28px;
+      width: auto;
+    }
+
+    .nav-link {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      transition: color 140ms ease;
+    }
+
+    .nav-link:hover {
+      color: var(--ink);
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding-block: 44px 56px;
+      max-width: 680px;
+      margin-inline: auto;
+    }
+
+    .app-icon-wrap {
+      display: inline-block;
+      margin-bottom: 24px;
+    }
+
+    .app-icon {
+      width: 72px;
+      height: 72px;
+      filter: var(--icon-shadow);
+    }
+
+    h1 {
+      margin: 0 auto 18px;
+      font-size: clamp(2.15rem, 4.4vw, 3.55rem);
+      font-weight: 660;
+      letter-spacing: -0.036em;
+      line-height: 1.05;
+      text-wrap: balance;
+      max-width: 15ch;
+    }
+
+    .subhead {
+      margin: 0 auto 30px;
+      font-size: clamp(1rem, 1.4vw, 1.15rem);
+      line-height: 1.5;
+      color: var(--ink-secondary);
+      max-width: 48ch;
+      text-wrap: pretty;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 14px 22px;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 22px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-size: 15.5px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      transition: background-color 140ms ease, transform 120ms ease;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px);
+    }
+
+    .btn-version {
+      font-size: 13.5px;
+      font-weight: 500;
+      opacity: 0.82;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .btn-secondary {
+      font-size: 15px;
+      font-weight: 550;
+      color: var(--ink);
+      padding: 10px 4px;
+      transition: color 140ms ease;
+    }
+
+    .btn-secondary:hover {
+      color: var(--accent);
+    }
+
+    .meta-req {
+      margin: 16px 0 0;
+      font-size: 13.5px;
+      color: var(--ink-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Product stage */
+    .stage-section {
+      padding-bottom: 92px;
+    }
+
+    .stage {
+      background: var(--surface);
+      border-radius: 22px;
+      padding: 36px 36px 28px;
+    }
+
+    .mobile-switch {
+      display: none;
+    }
+
+    .stage-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.92fr) minmax(0, 0.89fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .shot-figure {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .shot-figure img {
+      width: 100%;
+      height: auto;
+      filter: var(--window-shadow);
+    }
+
+    .shot-figure figcaption {
+      font-size: 13.5px;
+      color: var(--ink-secondary);
+      text-align: center;
+    }
+
+    /* Facts */
+    .facts-section {
+      max-width: calc(988px + var(--gutter) * 2);
+      margin-inline: auto;
+      padding-bottom: 80px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .facts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 24px 40px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      text-align: center;
+    }
+
+    .fact h3 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      font-weight: 620;
+      letter-spacing: -0.015em;
+      line-height: 1.3;
+      color: var(--ink);
+    }
+
+    .fact p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--ink-secondary);
+    }
+
+    /* First launch note */
+    .gatekeeper-section {
+      max-width: calc(720px + var(--gutter) * 2);
+      margin-inline: auto;
+      padding-bottom: 76px;
+    }
+
+    .gatekeeper-box {
+      background: var(--surface);
+      border-radius: 18px;
+      padding: 32px 34px;
+    }
+
+    .gatekeeper-box h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 620;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .gatekeeper-box p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.58;
+      color: var(--ink-secondary);
+      max-width: 68ch;
+      text-wrap: pretty;
+    }
+
+    .cmd-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 18px 0;
+      padding: 12px 14px 12px 16px;
+      border-radius: 12px;
+      background: var(--surface-strong);
+    }
+
+    .cmd-bar code {
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--ink);
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+
+    .cmd-bar code::-webkit-scrollbar {
+      display: none;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      appearance: none;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      font-weight: 560;
+      cursor: pointer;
+      transition: background-color 140ms ease, color 140ms ease;
+    }
+
+    .copy-btn:hover {
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .copy-btn[data-copied="true"] {
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    /* Footer */
+    .footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px 24px;
+      padding-block: 28px 44px;
+      font-size: 14px;
+      color: var(--ink-secondary);
+    }
+
+    .footer a:hover {
+      color: var(--ink);
+    }
+
+    /* Mobile (<= 760px) */
+    @media (max-width: 760px) {
+      :root {
+        --gutter: 20px;
+      }
+
+      .topbar {
+        padding-block: 18px;
+      }
+
+      .brand-wordmark {
+        height: 24px;
+      }
+
+      .hero {
+        padding-block: 24px 38px;
+      }
+
+      .app-icon {
+        width: 60px;
+        height: 60px;
+      }
+
+      .app-icon-wrap {
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        font-size: 34px;
+        margin-bottom: 14px;
+      }
+
+      .subhead {
+        font-size: 16px;
+        margin-bottom: 24px;
+      }
+
+      .actions {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .btn-primary {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .stage-section {
+        padding-bottom: 64px;
+      }
+
+      .stage {
+        border-radius: 18px;
+        padding: 18px 16px 20px;
+      }
+
+      .mobile-switch {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-bottom: 18px;
+        padding: 4px;
+        border-radius: 10px;
+        background: var(--surface-strong);
+      }
+
+      .switch-btn {
+        flex: 1;
+        appearance: none;
+        border: 0;
+        border-radius: 7px;
+        padding: 8px 12px;
+        background: transparent;
+        color: var(--ink-secondary);
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        font-weight: 560;
+        cursor: pointer;
+      }
+
+      .switch-btn[aria-pressed="true"] {
+        background: var(--bg);
+        color: var(--ink);
+      }
+
+      .stage-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .stage[data-mobile-view="menu"] .shot-window {
+        display: none;
+      }
+
+      .stage[data-mobile-view="window"] .shot-menu {
+        display: none;
+      }
+
+      .shot-menu img {
+        max-width: 310px;
+        margin-inline: auto;
+      }
+
+      .shot-figure figcaption {
+        display: none;
+      }
+
+      .facts-section {
+        padding-bottom: 60px;
+      }
+
+      .facts-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .gatekeeper-section {
+        padding-bottom: 56px;
+      }
+
+      .gatekeeper-box {
+        padding: 24px 20px;
+        border-radius: 16px;
+      }
+
+      .cmd-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .cmd-bar code {
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        font-size: 12.5px;
+      }
+
+      .copy-btn {
+        align-self: flex-end;
+      }
+
+      .footer {
+        padding-block: 20px 36px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="wrap topbar">
+    <a class="brand-link" href="/" aria-label="Stint home">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="/assets/wordmark-dark.svg">
+        <img class="brand-wordmark" src="/assets/wordmark-light.svg" alt="Stint" width="106" height="28">
+      </picture>
+    </a>
+    <a class="nav-link" href="https://github.com/tuanvumaihuynh/stint">GitHub</a>
+  </header>
+
+  <main>
+    <section class="wrap hero">
+      <div class="app-icon-wrap">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="/assets/app-icon-dark.png">
+          <img class="app-icon" src="/assets/app-icon-light.png" alt="" width="72" height="72">
+        </picture>
+      </div>
+      <h1>Every AI limit, one menu bar.</h1>
+      <p class="subhead">A small tool I built for myself to see how much of my Claude, Codex, and Antigravity limits I have used. That is all it does.</p>
+      <div class="actions">
+        <a class="btn-primary" data-download href="https://github.com/tuanvumaihuynh/stint/releases/latest">
+          <span>Download for macOS</span>
+          <span class="btn-version" data-version>v0.1.0</span>
+        </a>
+        <a class="btn-secondary" href="https://github.com/tuanvumaihuynh/stint">View on GitHub</a>
+      </div>
+      <p class="meta-req">macOS 15+ · Apple silicon &amp; Intel · Free</p>
+    </section>
+
+    <section class="wrap stage-section" aria-label="Screenshots">
+      <div class="stage" data-mobile-view="menu">
+        <div class="mobile-switch" role="group" aria-label="Choose screenshot">
+          <button type="button" class="switch-btn" data-view="menu" aria-pressed="true">Menu bar</button>
+          <button type="button" class="switch-btn" data-view="window" aria-pressed="false">Accounts window</button>
+        </div>
+        <div class="stage-grid">
+          <figure class="shot-figure shot-window">
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/window-dark.png">
+              <img src="/assets/window-light.png" alt="Stint Accounts window listing Claude and Codex accounts with their usage" width="1440" height="1040">
+            </picture>
+            <figcaption>Accounts window</figcaption>
+          </figure>
+          <figure class="shot-figure shot-menu">
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="/assets/menu-dark.png">
+              <img src="/assets/menu-light.png" alt="Stint menu showing 5-hour and Weekly usage for each account" width="760" height="1184">
+            </picture>
+            <figcaption>Menu bar</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap facts-section" aria-labelledby="facts-heading">
+      <h2 id="facts-heading" class="sr-only">About Stint</h2>
+      <ul class="facts-grid">
+        <li class="fact">
+          <h3>Several accounts</h3>
+          <p>Claude, Codex, and Antigravity, side by side.</p>
+        </li>
+        <li class="fact">
+          <h3>Stays on your Mac</h3>
+          <p>Logins live in your Keychain. No server.</p>
+        </li>
+        <li class="fact">
+          <h3>Free and open source</h3>
+          <p>Apache-2.0, on GitHub.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="wrap gatekeeper-section" aria-labelledby="first-launch-heading">
+      <div class="gatekeeper-box">
+        <h2 id="first-launch-heading">First launch</h2>
+        <p>Stint is not notarized, so macOS blocks it the first time. Run this once:</p>
+        <div class="cmd-bar">
+          <code id="xattr-cmd">xattr -dr com.apple.quarantine /Applications/Stint.app</code>
+          <button type="button" class="copy-btn" data-copy="xattr-cmd">Copy</button>
+        </div>
+        <p>Or open it once, then choose Open Anyway in System Settings &rarr; Privacy &amp; Security.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <span>Stint · Apache-2.0</span>
+    <a href="https://github.com/tuanvumaihuynh/stint">GitHub</a>
+  </footer>
+
+  <script>
+    (function () {
+      var stage = document.querySelector('.stage');
+      var switches = document.querySelectorAll('.switch-btn');
+      switches.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          stage.setAttribute('data-mobile-view', btn.getAttribute('data-view'));
+          switches.forEach(function (other) {
+            other.setAttribute('aria-pressed', other === btn ? 'true' : 'false');
+          });
+        });
+      });
+
+      var copyBtn = document.querySelector('[data-copy]');
+      copyBtn.addEventListener('click', function () {
+        var text = document.getElementById(copyBtn.getAttribute('data-copy')).textContent;
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(text).then(function () {
+          copyBtn.textContent = 'Copied';
+          copyBtn.setAttribute('data-copied', 'true');
+          setTimeout(function () {
+            copyBtn.textContent = 'Copy';
+            copyBtn.removeAttribute('data-copied');
+          }, 1800);
+        });
+      });
+
+      // Point Download at the latest release's disk image; the releases page stays the fallback.
+      fetch('https://api.github.com/repos/tuanvumaihuynh/stint/releases/latest')
+        .then(function (res) { return res.ok ? res.json() : Promise.reject(res.status); })
+        .then(function (release) {
+          var dmg = (release.assets || []).find(function (a) { return /\.dmg$/.test(a.name); });
+          if (dmg) {
+            document.querySelectorAll('[data-download]').forEach(function (a) { a.href = dmg.browser_download_url; });
+          }
+          if (release.tag_name) {
+            document.querySelectorAll('[data-version]').forEach(function (el) { el.textContent = release.tag_name; });
+          }
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

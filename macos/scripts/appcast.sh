@@ -2,15 +2,6 @@
 # Signs a release zip with the Sparkle EdDSA key and writes its appcast to target/dist/.
 #
 #   SPARKLE_PRIVATE_KEY=... macos/scripts/appcast.sh 0.1.0
-#
-# Run after macos/scripts/release.sh. The private key comes only from the environment,
-# never from the login Keychain, and must match macos/sparkle-public-key.txt.
-#   SPARKLE_PRIVATE_KEY          the base64 EdDSA private key (required)
-#   SPARKLE_PUBLIC_KEY           the key the app checks updates with
-#   SPARKLE_DIST_DIR             where the release zip is, target/dist by default
-#   SPARKLE_BIN_DIR              where Sparkle's generate_appcast is
-#   SPARKLE_DOWNLOAD_URL_PREFIX  where the zip is downloaded from
-#   SPARKLE_RELEASE_URL          the release page linked from the appcast
 set -eu
 
 version=${1:-}
@@ -46,7 +37,6 @@ if [ -z "$public_key" ]; then
     exit 1
 fi
 
-# The key is read from stdin so it never shows up in a process list.
 derived_key=$(printf '%s\n' "$private_key" | swift -e '
 import CryptoKit
 import Foundation
@@ -84,7 +74,6 @@ if [ ! -x "$generate_appcast" ]; then
     exit 1
 fi
 
-# Only the zip goes in, so the disk image and checksums never end up in the feed.
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
 cp "$zip" "$staging/"

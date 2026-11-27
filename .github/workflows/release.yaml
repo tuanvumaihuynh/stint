@@ -17,13 +17,11 @@ env:
 jobs:
   release:
     name: Release (macOS)
-    # Matches the local Xcode 27 toolchain.
     runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
-          # Full history, so the build number counts commits.
           fetch-depth: 0
           persist-credentials: false
       - id: meta

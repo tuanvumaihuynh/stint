@@ -7,7 +7,40 @@ It keeps each login in the macOS Keychain, stores usage history in one local SQL
 > [!WARNING]
 > **Stint is in pre-release development for macOS.** Quota checks use internal endpoints that providers may change without notice. Antigravity quota comes from Google's internal API, and Google may restrict accounts that use third-party tools.
 
-## Run locally
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/menu-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/menu-light.png">
+  <img alt="Stint menu bar menu showing Claude, Codex, and Antigravity account usage" src="assets/menu-light.png" width="380">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/window-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/window-light.png">
+  <img alt="Stint Accounts window showing connected accounts and usage limits" src="assets/window-light.png" width="720">
+</picture>
+
+## Install
+
+Requires macOS 15 or later (Apple silicon or Intel).
+
+1. Download `Stint-<version>.dmg` from [GitHub Releases](https://github.com/tuanvumaihuynh/stint/releases/latest).
+2. Open the disk image and drag **Stint** to **Applications**.
+
+### Opening Stint the first time
+
+Release builds are ad-hoc signed and are not notarized with an Apple Developer ID, so macOS Gatekeeper blocks the first launch. Either:
+
+- Clear the quarantine attribute in Terminal:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Stint.app
+  ```
+
+- Or try opening Stint once, then open **System Settings → Privacy & Security** and choose **Open Anyway**.
+
+Later in-app updates downloaded through Sparkle are verified with EdDSA and install without repeating this step.
+
+## Build from source
 
 Requirements: macOS, Xcode, [rustup](https://rustup.rs) (the pinned toolchain installs on first build), and [just](https://github.com/casey/just).
 

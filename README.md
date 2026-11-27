@@ -4,9 +4,6 @@ Stint is a macOS menu bar app that tracks subscription usage limits across sever
 
 It keeps each login in the macOS Keychain, stores usage history in one local SQLite database, and shows it in a native Swift app built on a Rust core.
 
-> [!WARNING]
-> **Stint is in pre-release development for macOS.** Quota checks use internal endpoints that providers may change without notice. Antigravity quota comes from Google's internal API, and Google may restrict accounts that use third-party tools.
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/menu-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/menu-light.png">

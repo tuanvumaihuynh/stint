@@ -62,7 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitOnTerminationSignal()
         let updates = Updates.start()
         let statusMenu = StatusMenuController(
-            menu: { core.menu() }, perform: { [weak self] in self?.perform($0) }, updates: updates
+            menu: { core.menu() },
+            perform: { [weak self] in self?.perform($0) },
+            pin: { id in
+                do {
+                    try core.setPinnedAccount(id)
+                } catch {
+                    NSLog("stint: pin account: %@", userMessage(error))
+                }
+            },
+            updates: updates
         )
         core.onChange = { statusMenu.update() }
         updates?.onChange = { statusMenu.update() }

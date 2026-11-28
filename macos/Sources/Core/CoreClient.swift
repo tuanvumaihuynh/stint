@@ -48,6 +48,14 @@ final class CoreClient {
         try stint.setShownInMenu(id: id, shown: shown)
     }
 
+    func setPinnedAccount(_ id: Int64) throws {
+        try stint.setPinnedAccount(id: id)
+    }
+
+    func setMenuBarStyle(_ style: MenuBarStyle) throws {
+        try stint.setMenuBarStyle(style: style)
+    }
+
     func remove(_ id: Int64) throws {
         try stint.removeAccount(id: id)
     }

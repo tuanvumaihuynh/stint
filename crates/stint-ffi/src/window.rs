@@ -5,6 +5,7 @@ use stint_core::ProviderId;
 
 use crate::format;
 use crate::menu::{self, Entry, MenuData};
+use crate::pin::MenuBarStyle;
 use crate::quota::{AccountQuota, FetchError};
 
 /// A provider an account can belong to.
@@ -82,6 +83,9 @@ pub struct Overview {
     pub updated: Option<String>,
     pub refreshing: bool,
     pub refresh_minutes: u32,
+    /// The account the menu bar shows; `None` only without accounts.
+    pub pinned_account: Option<i64>,
+    pub menu_bar_style: MenuBarStyle,
 }
 
 /// The refresh intervals the window offers, in minutes.
@@ -98,6 +102,7 @@ pub(crate) fn overview(
     let data = MenuData {
         accounts: accounts.to_vec(),
         refreshing,
+        pinned: None,
     };
     let summary = match menu::header(&data, offline) {
         Entry::Header { status, .. } => status,
@@ -123,6 +128,8 @@ pub(crate) fn overview(
             .map(|at| updated(now, at)),
         refreshing,
         refresh_minutes,
+        pinned_account: None,
+        menu_bar_style: MenuBarStyle::default(),
     }
 }
 

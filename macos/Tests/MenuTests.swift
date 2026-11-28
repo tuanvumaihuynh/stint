@@ -16,6 +16,16 @@ final class MenuTests: XCTestCase {
         let menu = try XCTUnwrap(mockMenu(scenario: "default"))
         XCTAssertEqual(menu.entries.first, .header(status: "7 accounts · 2 need attention", dot: .attention))
         XCTAssertFalse(menu.offline)
+        XCTAssertEqual(menu.statusText, "77%")
+    }
+
+    func testFirstAccountIsPinnedByDefault() throws {
+        let menu = try XCTUnwrap(mockMenu(scenario: "default"))
+        let pinned = menu.entries.compactMap { entry -> String? in
+            if case let .account(_, name, _, _, pinned) = entry, pinned { return name }
+            return nil
+        }
+        XCTAssertEqual(pinned, ["Personal"])
     }
 
     func testCommandsHaveTitlesAndKeys() {

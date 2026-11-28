@@ -15,15 +15,23 @@ struct MenuBarPane: View {
                 }
             } else {
                 Section {
-                    Picker("Show in menu bar", selection: pinned) {
+                    Picker(selection: pinned) {
                         ForEach(accounts, id: \.id) { account in
                             Text("\(account.provider.title) · \(account.name)").tag(Optional(account.id))
                         }
+                    } label: {
+                        Text("Show in menu bar")
+                        Text("Pin one account's live usage beside the Stint icon.")
                     }
-                    Picker("Display style", selection: style) {
+                    Picker(selection: style) {
                         Text("Icon only").tag(MenuBarStyle.icon)
                         Text("Icon + 5-hour %").tag(MenuBarStyle.iconPercent)
+                    } label: {
+                        Text("Display style")
+                        Text("Falls back to the first window without a 5-hour one.")
                     }
+                } header: {
+                    Text("Status Bar Display")
                 }
             }
             ForEach(Provider.all, id: \.self) { provider in
@@ -42,6 +50,8 @@ struct MenuBarPane: View {
                     } header: {
                         VStack(alignment: .leading, spacing: 12) {
                             if provider == firstProvider {
+                                Text("Accounts in Dropdown")
+                                    .font(.headline)
                                 Text("Choose which accounts appear in the menu bar menu. Hidden accounts continue updating in this window.")
                                     .font(.body)
                                     .fontWeight(.regular)

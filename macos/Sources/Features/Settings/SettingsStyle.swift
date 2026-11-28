@@ -171,7 +171,7 @@ struct AppLogo: View {
     let size: CGFloat
 
     var body: some View {
-        Image("AppLogo")
+        Image(AssetNames.appLogo)
             .resizable()
             .interpolation(.high)
             .antialiased(true)

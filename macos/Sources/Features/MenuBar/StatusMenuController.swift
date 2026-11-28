@@ -12,6 +12,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // macOS draws item subtitles at this size.
     private static let subtitleSize: CGFloat = 11
     private static let readingLineHeight: CGFloat = 15
+    // The account name's line, which the pin sits beside.
+    private static let titleLineHeight: CGFloat = 16
+    private static let pinSize: CGFloat = 11
+    // A template image keeps its alpha, so the pin reads as secondary text and still turns
+    // white on a highlighted row.
+    private static let pinAlpha: CGFloat = 0.55
     // The status icon is dimmed while every account is offline.
     private static let offlineAlpha: CGFloat = 0.45
 
@@ -107,7 +113,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             item.target = self
             item.representedObject = NSNumber(value: id)
             item.attributedTitle = Self.accountTitle(name: name, plan: plan, readings: subtitle)
-            item.onStateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "Pinned")
+            item.onStateImage = Self.pinImage(readingLines: subtitle.split(separator: "\n").count)
             item.state = pinned ? .on : .off
             return item
         case .notice(let title, let subtitle):
@@ -189,6 +195,36 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         )
         title.append(lines)
         return title
+    }
+
+    /// A small tilted pin, as tall as the whole row and drawn beside the name: AppKit centers
+    /// a state image on the row, which would put it between the name and the readings.
+    private static func pinImage(readingLines: Int) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: pinSize - 2, weight: .regular)
+        guard
+            let symbol = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "Pinned")?
+                .withSymbolConfiguration(config)
+        else { return nil }
+        let height = titleLineHeight + CGFloat(max(readingLines, 1)) * readingLineHeight
+        let image = NSImage(size: NSSize(width: pinSize, height: height), flipped: true) { _ in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.translateBy(x: pinSize / 2, y: titleLineHeight / 2)
+            // Head up and to the right, like a pushed-in pin.
+            context.rotate(by: .pi / 4)
+            let size = symbol.size
+            symbol.draw(
+                in: NSRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height),
+                from: .zero,
+                operation: .sourceOver,
+                fraction: pinAlpha,
+                respectFlipped: true,
+                hints: nil
+            )
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Pinned"
+        return image
     }
 
     private static func dotColor(_ dot: Dot) -> NSColor {

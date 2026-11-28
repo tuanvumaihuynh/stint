@@ -34,7 +34,7 @@
 
         func applicationDidFinishLaunching(_ notification: Notification) {
             controller = StatusMenuController(menu: { [weak self] in
-                self?.current ?? Menu(entries: [], offline: false)
+                self?.current ?? Menu(entries: [], offline: false, statusText: nil)
             }, perform: { _ in }, updates: updates)
             Timer.scheduledTimer(withTimeInterval: Self.startupDelay, repeats: false) { _ in
                 MainActor.assumeIsolated {

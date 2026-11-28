@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Which accounts the status menu lists.
+/// Which account the menu bar shows, and which accounts the status menu lists.
 struct MenuBarPane: View {
     let core: CoreClient
     @State private var error: String?
@@ -12,6 +12,18 @@ struct MenuBarPane: View {
             if accounts.isEmpty {
                 Section {
                     Text("Accounts you add appear here.").foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    Picker("Show in menu bar", selection: pinned) {
+                        ForEach(accounts, id: \.id) { account in
+                            Text("\(account.provider.title) · \(account.name)").tag(Optional(account.id))
+                        }
+                    }
+                    Picker("Display style", selection: style) {
+                        Text("Icon only").tag(MenuBarStyle.icon)
+                        Text("Icon + 5-hour %").tag(MenuBarStyle.iconPercent)
+                    }
                 }
             }
             ForEach(Provider.all, id: \.self) { provider in
@@ -60,6 +72,33 @@ struct MenuBarPane: View {
             Button("OK") {}
         } message: {
             Text(error ?? "")
+        }
+    }
+}
+
+extension MenuBarPane {
+    private var pinned: Binding<Int64?> {
+        Binding {
+            core.overview.pinnedAccount
+        } set: { id in
+            guard let id else { return }
+            change { try core.setPinnedAccount(id) }
+        }
+    }
+
+    private var style: Binding<MenuBarStyle> {
+        Binding {
+            core.overview.menuBarStyle
+        } set: { style in
+            change { try core.setMenuBarStyle(style) }
+        }
+    }
+
+    private func change(_ action: () throws -> Void) {
+        do {
+            try action()
+        } catch {
+            self.error = userMessage(error)
         }
     }
 }

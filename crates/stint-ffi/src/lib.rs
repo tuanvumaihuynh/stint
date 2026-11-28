@@ -8,6 +8,7 @@
 mod format;
 mod menu;
 mod mock;
+mod pin;
 mod quota;
 mod signin;
 mod window;
@@ -23,6 +24,7 @@ use stint_providers::{Accounts, Vault};
 
 use menu::MenuData;
 pub use menu::{Command, Dot, Entry};
+pub use pin::MenuBarStyle;
 use quota::{QuotaState, Refresh, Source};
 use signin::Target;
 pub use signin::{SignInListener, SignInSession};
@@ -60,6 +62,15 @@ pub struct Menu {
     pub entries: Vec<Entry>,
     /// Every account is offline, so the menu bar icon is dimmed.
     pub offline: bool,
+    /// What the menu bar shows after the icon, such as "48%"; `None` for the icon alone.
+    pub status_text: Option<String>,
+}
+
+/// The menu bar choices as stored; the pin may name a removed account.
+#[derive(Debug, Clone, Copy)]
+struct MenuBar {
+    pinned: Option<AccountId>,
+    style: MenuBarStyle,
 }
 
 /// The app's handle on the core.
@@ -72,6 +83,7 @@ pub struct Stint {
     data_dir: Option<PathBuf>,
     listener: Arc<dyn Listener>,
     refresh_minutes: AtomicU32,
+    menu_bar: Mutex<MenuBar>,
     last_refresh: Mutex<Instant>,
 }
 
@@ -114,6 +126,15 @@ impl Stint {
             Source::Mock(_) => None,
         }
         .unwrap_or(window::DEFAULT_REFRESH_MINUTES);
+        let stored = |key: &str| match &source {
+            Source::Store(store) => store.setting(key).ok().flatten(),
+            Source::Mock(_) => None,
+        };
+        let menu_bar = MenuBar {
+            pinned: stored(pin::PIN_SETTING).and_then(|value| pin::parse_pin(&value)),
+            style: stored(pin::STYLE_SETTING)
+                .map_or_else(MenuBarStyle::default, |value| MenuBarStyle::parse(&value)),
+        };
         let starts_refreshing = match &source {
             Source::Store(_) => true,
             Source::Mock(name) => mock::refreshing(name),
@@ -125,6 +146,7 @@ impl Stint {
             data_dir,
             listener,
             refresh_minutes: AtomicU32::new(refresh_minutes),
+            menu_bar: Mutex::new(menu_bar),
             last_refresh: Mutex::new(Instant::now()),
         });
         if starts_refreshing {
@@ -154,18 +176,59 @@ impl Stint {
             .filter(|account| account.shown_in_menu)
             .cloned()
             .collect();
-        menu_of(&shown, state.refreshing, Timestamp::now())
+        let menu_bar = *self.menu_bar();
+        let pinned = pin::effective(&state.accounts, menu_bar.pinned);
+        let account = state.accounts.iter().find(|a| Some(a.id) == pinned);
+        let offline = menu::is_offline(&state.accounts);
+        let mut menu = menu_of(&shown, state.refreshing, pinned, Timestamp::now());
+        menu.status_text = pin::status_text(account, menu_bar.style, offline);
+        menu
     }
 
     /// The window as of now.
     pub fn overview(&self) -> Overview {
         let state = self.state();
-        window::overview(
+        let menu_bar = *self.menu_bar();
+        let mut overview = window::overview(
             &state.accounts,
             state.refreshing,
             self.refresh_minutes.load(Ordering::SeqCst),
             Timestamp::now(),
-        )
+        );
+        overview.pinned_account =
+            pin::effective(&state.accounts, menu_bar.pinned).map(AccountId::get);
+        overview.menu_bar_style = menu_bar.style;
+        overview
+    }
+
+    /// Shows an account's usage in the menu bar, and remembers it.
+    pub fn set_pinned_account(&self, id: i64) -> Result<(), StintError> {
+        let id = AccountId::new(id);
+        let mut state = self.state();
+        if !state.accounts.iter().any(|a| a.id == id) {
+            return Err(StintError::Message("That account was removed.".to_owned()));
+        }
+        if let Some(store) = state.store_mut() {
+            store
+                .set_setting(pin::PIN_SETTING, &id.get().to_string())
+                .map_err(|err| signin::store_failure(&err))?;
+        }
+        drop(state);
+        self.menu_bar().pinned = Some(id);
+        self.listener.changed();
+        Ok(())
+    }
+
+    /// Sets what the menu bar shows next to the icon, and remembers it.
+    pub fn set_menu_bar_style(&self, style: MenuBarStyle) -> Result<(), StintError> {
+        if let Some(store) = self.state().store_mut() {
+            store
+                .set_setting(pin::STYLE_SETTING, style.as_str())
+                .map_err(|err| signin::store_failure(&err))?;
+        }
+        self.menu_bar().style = style;
+        self.listener.changed();
+        Ok(())
     }
 
     /// The refresh intervals offered, in minutes.
@@ -213,6 +276,17 @@ impl Stint {
     pub fn remove_account(&self, id: i64) -> Result<(), StintError> {
         let id = AccountId::new(id);
         let mut state = self.state();
+        let mut menu_bar = self.menu_bar();
+        if menu_bar.pinned == Some(id) {
+            // Cleared rather than moved, so the first account is pinned until one is chosen.
+            menu_bar.pinned = None;
+            if let Some(store) = state.store_mut()
+                && let Err(err) = store.set_setting(pin::PIN_SETTING, "")
+            {
+                eprintln!("stint: forget the pinned account: {err}");
+            }
+        }
+        drop(menu_bar);
         let Some(store) = state.store_mut() else {
             state.accounts.retain(|account| account.id != id);
             drop(state);
@@ -306,6 +380,10 @@ impl Stint {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    fn menu_bar(&self) -> MutexGuard<'_, MenuBar> {
+        self.menu_bar.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn last_refresh(&self) -> MutexGuard<'_, Instant> {
         self.last_refresh
             .lock()
@@ -378,17 +456,29 @@ pub fn mock_scenarios() -> Vec<String> {
 pub fn mock_menu(scenario: &str) -> Option<Menu> {
     let now = Timestamp::now();
     let accounts = mock::scenario(scenario, now)?;
-    Some(menu_of(&accounts, mock::refreshing(scenario), now))
+    let pinned = pin::effective(&accounts, None);
+    let account = accounts.iter().find(|a| Some(a.id) == pinned);
+    let offline = menu::is_offline(&accounts);
+    let mut menu = menu_of(&accounts, mock::refreshing(scenario), pinned, now);
+    menu.status_text = pin::status_text(account, MenuBarStyle::default(), offline);
+    Some(menu)
 }
 
-fn menu_of(accounts: &[quota::AccountQuota], refreshing: bool, now: Timestamp) -> Menu {
+fn menu_of(
+    accounts: &[quota::AccountQuota],
+    refreshing: bool,
+    pinned: Option<AccountId>,
+    now: Timestamp,
+) -> Menu {
     let data = MenuData {
         accounts: accounts.to_vec(),
         refreshing,
+        pinned,
     };
     Menu {
         entries: menu::entries(&data, now),
         offline: menu::is_offline(accounts),
+        status_text: None,
     }
 }
 
@@ -463,6 +553,29 @@ mod tests {
         assert_eq!(stint.overview().refresh_minutes, 10);
         assert!(stint.set_refresh_minutes(7).is_err());
         assert!(!stint.refresh_due());
+    }
+
+    #[test]
+    fn pin_and_style_follow_the_choices() {
+        let counter = Arc::new(Counter::default());
+        let stint = Stint::new(Some("default".into()), counter).unwrap();
+        let accounts = stint.overview().accounts;
+        assert_eq!(stint.overview().pinned_account, Some(accounts[0].id));
+        assert_eq!(stint.menu().status_text.as_deref(), Some("77%"));
+
+        stint.set_pinned_account(accounts[3].id).unwrap();
+        assert_eq!(stint.overview().pinned_account, Some(accounts[3].id));
+        assert_eq!(stint.menu().status_text.as_deref(), Some("34%"));
+        assert!(stint.set_pinned_account(99).is_err());
+
+        stint.set_menu_bar_style(MenuBarStyle::Icon).unwrap();
+        assert_eq!(stint.overview().menu_bar_style, MenuBarStyle::Icon);
+        assert_eq!(stint.menu().status_text, None);
+        stint.set_menu_bar_style(MenuBarStyle::IconPercent).unwrap();
+
+        stint.remove_account(accounts[3].id).unwrap();
+        assert_eq!(stint.overview().pinned_account, Some(accounts[0].id));
+        assert_eq!(stint.menu().status_text.as_deref(), Some("77%"));
     }
 
     #[test]

@@ -19,15 +19,23 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let statusMenu = NSMenu()
     private let source: () -> Menu
     private let perform: (Command) -> Void
+    private let pin: (Int64) -> Void
     // `nil` in builds that do not update themselves.
     private let updates: Updates?
     // The command of each command item, by its tag.
     private var commands: [Command] = []
 
-    /// `menu` is read every time the menu opens; `perform` runs a chosen command.
-    init(menu: @escaping () -> Menu, perform: @escaping (Command) -> Void, updates: Updates? = nil) {
+    /// `menu` is read every time the menu opens; `perform` runs a chosen command and `pin`
+    /// shows a chosen account in the menu bar.
+    init(
+        menu: @escaping () -> Menu,
+        perform: @escaping (Command) -> Void,
+        pin: @escaping (Int64) -> Void = { _ in },
+        updates: Updates? = nil
+    ) {
         source = menu
         self.perform = perform
+        self.pin = pin
         self.updates = updates
         super.init()
         if let icon = NSImage(named: "StatusIcon") {
@@ -35,7 +43,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             // Tinted by macOS for light and dark menu bars.
             icon.isTemplate = true
             statusItem.button?.image = icon
+            statusItem.button?.imagePosition = .imageLeading
         }
+        statusItem.button?.font = .monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
         // Items without an action stay enabled instead of being dimmed.
         statusMenu.autoenablesItems = false
         statusMenu.minimumWidth = Self.menuWidth
@@ -47,6 +57,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     func update() {
         let menu = source()
         statusItem.button?.alphaValue = menu.offline ? Self.offlineAlpha : 1
+        // Plain text in the button's own color, so it follows every menu bar appearance.
+        statusItem.button?.title = menu.statusText ?? ""
+        statusItem.button?.imagePosition = menu.statusText == nil ? .imageOnly : .imageLeading
         rebuild(from: menu)
     }
 
@@ -88,10 +101,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                 item.image = icon
             }
             return item
-        case .account(let name, let plan, let subtitle):
+        case .account(let id, let name, let plan, let subtitle, let pinned):
             let plain = plan.map { "\(name) · \($0)" } ?? name
-            let item = passive(plain)
+            let item = NSMenuItem(title: plain, action: #selector(pinAccount(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: id)
             item.attributedTitle = Self.accountTitle(name: name, plan: plan, readings: subtitle)
+            item.onStateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "Pinned")
+            item.state = pinned ? .on : .off
             return item
         case .notice(let title, let subtitle):
             return passive(title, subtitle: subtitle)
@@ -120,6 +137,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func checkForUpdates() {
         updates?.checkForUpdates()
+    }
+
+    @objc private func pinAccount(_ sender: NSMenuItem) {
+        guard sender.state != .on, let id = sender.representedObject as? NSNumber else { return }
+        pin(id.int64Value)
     }
 
     @objc private func runCommand(_ sender: NSMenuItem) {

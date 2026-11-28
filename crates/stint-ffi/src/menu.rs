@@ -1,7 +1,7 @@
 //! What the status menu shows, as plain data. The Swift side only draws these entries.
 
 use jiff::Timestamp;
-use stint_core::{ProviderId, QuotaWindow, WindowKind};
+use stint_core::{AccountId, ProviderId, QuotaWindow, WindowKind};
 
 use crate::format;
 use crate::quota::{AccountQuota, FetchError};
@@ -11,6 +11,8 @@ use crate::quota::{AccountQuota, FetchError};
 pub(crate) struct MenuData {
     pub(crate) accounts: Vec<AccountQuota>,
     pub(crate) refreshing: bool,
+    /// The account the menu bar shows.
+    pub(crate) pinned: Option<AccountId>,
 }
 
 /// One row of the menu, top to bottom.
@@ -25,11 +27,14 @@ pub enum Entry {
     Section {
         title: String,
     },
-    /// "Personal · Max 5x" over its readings. It has no action.
+    /// "Personal · Max 5x" over its readings. Choosing it pins the account.
     Account {
+        id: i64,
         name: String,
         plan: Option<String>,
         subtitle: String,
+        /// The menu bar shows this account.
+        pinned: bool,
     },
     /// A passive two-line message, such as the empty state.
     Notice {
@@ -115,9 +120,11 @@ pub(crate) fn entries(data: &MenuData, now: Timestamp) -> Vec<Entry> {
                 title: provider_name(provider).to_owned(),
             });
             rows.extend(group.map(|account| Entry::Account {
+                id: account.id.get(),
                 name: account.name.clone(),
                 plan: account.plan.clone(),
                 subtitle: subtitle(account, offline, now),
+                pinned: data.pinned == Some(account.id),
             }));
             rows.push(Entry::Separator);
         }
@@ -340,6 +347,7 @@ mod tests {
         MenuData {
             accounts: mock::scenario(scenario, now()).unwrap(),
             refreshing: mock::refreshing(scenario),
+            pinned: None,
         }
     }
 
@@ -350,6 +358,7 @@ mod tests {
                     name,
                     plan,
                     subtitle,
+                    ..
                 } => {
                     let title = match plan {
                         Some(plan) => format!("{name} · {plan}"),
@@ -421,6 +430,22 @@ mod tests {
         assert!(rows.contains(&section("Codex")));
         assert!(rows.contains(&section("Antigravity")));
         assert_eq!(refresh_of(&rows), (Some("Updated 2m ago".to_owned()), true));
+    }
+
+    #[test]
+    fn pinned_account_is_marked() {
+        let mut data = data("default");
+        data.pinned = Some(data.accounts[3].id);
+        let pinned: Vec<i64> = entries(&data, now())
+            .iter()
+            .filter_map(|row| match row {
+                Entry::Account {
+                    id, pinned: true, ..
+                } => Some(*id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(pinned, vec![data.accounts[3].id.get()]);
     }
 
     #[test]

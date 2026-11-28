@@ -30,7 +30,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         self.perform = perform
         self.updates = updates
         super.init()
-        if let icon = NSImage(named: "StatusIcon") {
+        if let icon = NSImage(named: AssetNames.statusIcon) {
             icon.size = NSSize(width: Self.statusIconSize, height: Self.statusIconSize)
             // Tinted by macOS for light and dark menu bars.
             icon.isTemplate = true
@@ -83,7 +83,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         case .header(let status, let dot):
             let item = passive("Stint")
             item.attributedTitle = Self.headerTitle(status: status, dot: dot)
-            if let icon = NSImage(named: "MenuHeaderIcon") {
+            if let icon = NSImage(named: AssetNames.menuHeaderIcon) {
                 icon.size = NSSize(width: Self.headerIconSize, height: Self.headerIconSize)
                 item.image = icon
             }
